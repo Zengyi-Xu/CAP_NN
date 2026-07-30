@@ -238,7 +238,8 @@ PLOT_SHOW = False
 | `OSC_SAMPLE_RATE` | 示波器采样率 10 GSa/s |
 | `M8190A_VISA_ADDR` | AWG VISA 地址 |
 | `OSC_VISA_ADDR` | 示波器 USB VISA 地址 |
-| `USE_NN` | 是否默认调用 NN 后均衡 (1/0) |
+| `POSTEQ_FLAG` | 后均衡类型：0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra；非 0 时 main.py 默认调用 NN |
+| `USE_NN` | 由 `POSTEQ_FLAG` 自动决定，是否默认调用 NN 后均衡 |
 | `PLOT_SHOW` / `PLOT_SAVE` | 是否显示 / 保存图像 |
 
 ## 与原始 MATLAB 的对应关系

@@ -75,8 +75,8 @@ AWG_VPP = 0.5                      # AWG 输出幅度 (Vpp)
 # 虚拟信道（用于无仪器时的调试/维护）
 # -----------------------------------------------------------------------------
 USE_VIRTUAL_CHANNEL = 1            # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
-VIRTUAL_CHANNEL_FC = 1.6e9         # 一阶低通截止频率 (Hz)，模拟发射端高频衰减
-VIRTUAL_CHANNEL_SNR_DB = 30        # 接收机信噪比 (dB)，数值越高噪声越小
+VIRTUAL_CHANNEL_FC = 0.8e9         # 一阶低通截止频率 (Hz)，模拟发射端高频衰减
+VIRTUAL_CHANNEL_SNR_DB = 20        # 接收机信噪比 (dB)，数值越高噪声越小
 VIRTUAL_CHANNEL_NONLINEARITY = 0.02  # 接收机三阶非线性系数
 VIRTUAL_CHANNEL_DELAY = 5          # 整数样点延迟（建议 <= CP）
 VIRTUAL_CHANNEL_ATTENUATION = 0.9  # 线性幅度衰减
@@ -151,8 +151,8 @@ PLOT_SHOW = True                   # 是否在 Spyder 中 plt.show() 显示图�
 PLOT_SAVE = False                  # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
 PLOT_DPI = 150                     # 保存图像分辨率
 
-USE_NN = 0                         # main.py 默认是否调用 ZY_BiGRU_GPU 做后均衡
 POSTEQ_FLAG = 1                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
+USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
 
 # -----------------------------------------------------------------------------
 # 运行模式

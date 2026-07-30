@@ -430,7 +430,7 @@ def main():
     parser.add_argument("--use-awg", type=int, default=0,
                         help="1=download waveform to M8190A")
     parser.add_argument("--use-nn", type=int, default=config.USE_NN,
-                        help="1=use ZY_BiGRU_GPU NN post-equalizer (default=1)")
+                        help="1=use ZY_BiGRU_GPU NN post-equalizer (default follows POSTEQ_FLAG)")
     parser.add_argument("--use-virtual-channel", type=int,
                         default=config.USE_VIRTUAL_CHANNEL,
                         help="1=offline mode uses virtual channel instead of reading files")
