@@ -83,3 +83,12 @@ Run ID：20260731_033206_76cef4
   结论：当前网络环境无法稳定连接 GitHub，push 尚未完成。后续可换网络后执行：
     git push -u origin master
   或手动在浏览器打开 https://github.com/Zengyi-Xu/DMT_PY_NN 上传。
+
+后续更新（2026-07-31 03:41 左右）：
+- HTTPS 仍然被防火墙阻断，但端口 22（SSH）可达。
+- 生成了本地 ed25519 部署密钥 `.git/github_deploy_key`，并将公钥添加到 GitHub 仓库 Deploy keys。
+- 通过 SSH 成功 push：
+    git remote set-url origin git@github.com:Zengyi-Xu/DMT_PY_NN.git
+    GIT_SSH_COMMAND="ssh -i .git/github_deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git push -u origin master
+- 推送结果：master -> master，branch 'master' set up to track 'origin/master'。
+- 仓库地址：https://github.com/Zengyi-Xu/DMT_PY_NN
