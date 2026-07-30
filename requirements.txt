@@ -1,0 +1,11 @@
+numpy>=1.21.0
+scipy>=1.7.0
+matplotlib>=3.4.0
+PyVISA>=1.12.0
+PyVISA-py>=0.7.0
+tqdm>=4.62.0
+matplotlib-inline>=0.1.0  # 用于在 Spyder/Jupyter 中显示图像
+
+# torch 建议根据 CUDA 版本安装：
+# CPU 版本:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+# CUDA 版本: pip install torch

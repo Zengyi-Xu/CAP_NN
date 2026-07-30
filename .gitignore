@@ -1,0 +1,39 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# 自动生成的数据/图片
+data/txdata/*.png
+data/rxdata/*.png
+data/txdata/*.txt
+data/rxdata/*.txt
+data/*.png
+data/*.txt
+data/*.mat
+data/*.json
+data/nn/*.txt
+data/nn/*.png
+data/nn/*.pth
+!data/SNRtable_*.txt
+!data/QAMorderall.txt
+!data/goodGS*.txt
+!data/th7.txt
+!data/finalSNReveryCarrier_QPSK.txt
+!data/nn/ZY_BiGRU_GPU.py
+!data/nn/trained_model_temp.pth
+
+# 每次运行的临时输出
+data/plots/
+data/records/
+data/codeplot_assets/
+
+# 计数器
+data/count.txt
