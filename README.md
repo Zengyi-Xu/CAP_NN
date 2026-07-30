@@ -241,17 +241,6 @@ PLOT_SHOW = False
 | `USE_NN` | 是否默认调用 NN 后均衡 (1/0) |
 | `PLOT_SHOW` / `PLOT_SAVE` | 是否显示 / 保存图像 |
 
-## 与原始 MATLAB 的对应关系
-
-| Python | MATLAB |
-|--------|--------|
-| `step1_generate_qpsk_tx` | `STEP1_SNRest_TX_QPSK__240112.m` |
-| `step2_receive_qpsk` | `STEP2_SNRest_RX_QPSK_240112.m` |
-| `step3_generate_bitloading_tx` | `STEP3_Bitloading_Tx_240112.m` |
-| `step4_receive_bitloading` | `STEP4_Bitloading_Rx_240112.m` |
-| `M8190AController` | `AWGM8190A_Auto/` + `AWG_transmit.m` |
-| `KeysightScopeUSB` | `oscrunDMT.m` / `oscrunQPSK.m` |
-| `NNEqualizer` | `NN/ZY_BiGRU_GPU.py` |
 
 ## 注意事项
 
