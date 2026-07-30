@@ -1,0 +1,85 @@
+DMT Python 重写项目开发日志
+=====================================
+时间：2026-07-31 03:39:47
+项目路径：D:\BaiduSyncdisk\SyncWorkplace\Individual\Code\20260730_DMT_testing_python
+（原文件夹名：20260429_900G_testing_python，后被重命名为当前名称）
+
+一、本次完成的功能
+------------------
+1. 绘图适配器 plot_adapter.py
+   - 每张图同时保存：
+     * data/codeplot_assets/<run_id>/data/<name>.npz  （数据）
+     * data/codeplot_assets/<run_id>/scripts/<name>.py  （CodePlot v5 可编辑脚本）
+   - 脚本使用 fig 变量，数据路径通过 Path(__file__).parent.parent / "data" / ... 加载，
+     可直接用 codeplot_v5.py 的“加载脚本”打开编辑。
+   - 在 Spyder 中运行 main.py 时，plot_adapter 会执行脚本并 plt.show() 显示图像。
+
+2. 热力图 colorbar 改为蓝绿色 GnBu
+   - plot_adapter.py 的星座密度模板 _CONST_DENSITY_TEMPLATE 改用 cmap="GnBu"。
+   - utils.py 中的 plot_tx_rx_nonlinearity 与 plot_constellation_density 的 hexbin 也同步改为 GnBu。
+
+3. 移除 Spectrogram
+   - main.py 中 STEP3 / STEP4 的 plot_dmt_spectrogram 调用已删除。
+   - 不再生成 spectrogram 的 .npz / .py。
+
+4. RX 星座按调制阶数分 subplot
+   - plot_adapter.py 新增 plot_constellation_by_order。
+   - utils.py 也补了 plot_constellation_by_order。
+   - main.py STEP4 现在同时生成：
+     * constellation_density（按阶数热力图）
+     * constellation_by_order（按阶数散点图，每阶数一张子图）
+
+5. 不再默认输出 PNG
+   - config.py 中 PLOT_SAVE = False。
+   - 主流程不再保存 PNG；只有 CodePlot v5 的 npz + py 会被保留到每次 run_id 子目录。
+
+6. main.py 调整
+   - STEP3 / STEP4 所有绘图调用改用 plot_adapter 的接口（传入 title、run_id、name）。
+   - 传输记录 record 中新增 codeplot_assets_dir 字段。
+   - 启动信息会打印 CodePlot v5 assets 保存路径。
+
+7. .gitignore 更新
+   - 增加忽略：data/txdata/*.txt、data/rxdata/*.txt、data/*.json、
+     data/plots/、data/records/、data/codeplot_assets/。
+   - 避免把每次运行的临时数据/图像/脚本推送到 GitHub。
+
+8. README.md 更新
+   - 项目结构中加入 plot_adapter.py、codeplot_v5.py、data/codeplot_assets/。
+   - “自动绘图”一节改为介绍 CodePlot v5 脚本 + NPZ 数据的工作流。
+   - 列出当前所有图名称，并说明 spectrogram 已移除。
+
+二、本地验证
+------------
+命令：
+  set MPLBACKEND=Agg && .venv/Scripts/python.exe -u main.py --offline 1 --use-virtual-channel 1 --use-awg 0
+
+Run ID：20260731_033206_76cef4
+结果：完整流程通过。
+关键输出：
+  - SE after BPL is 8.3887
+  - data rate is 16.2689 Gbps
+  - Final estimated BER = 7.855646e-03
+  - Final estimated SER = 6.678711e-02
+
+生成资产路径：
+  D:\BaiduSyncdisk\SyncWorkplace\Individual\Code\20260730_DMT_testing_python\data\codeplot_assets\20260731_033206_76cef4
+  其中包含 15 个 .npz 数据文件和 15 个 .py 脚本文件，无 spectrogram。
+
+额外验证：
+  - 用 CodePlot v5 方式（注入 fig / __file__）抽样执行了 constellation_by_order.py 和 constellation_density.py，均正常运行。
+
+三、Git / GitHub 状态
+---------------------
+- 已在项目目录执行 git init，并完成初次提交：
+  commit b049773 "feat: DMT Python pipeline with CodePlot v5 adapter, GnBu colormap, per-order constellation plots; remove spectrogram"
+
+- GitHub 仓库已创建：
+  https://github.com/Zengyi-Xu/DMT_PY_NN
+  remote origin 已指向该地址。
+
+- Push 尝试结果：
+  第一次：RPC failed; curl 55 Send failure: Connection was reset
+  第二次：Failed to connect to github.com port 443 after 21076 ms: Could not connect to server
+  结论：当前网络环境无法稳定连接 GitHub，push 尚未完成。后续可换网络后执行：
+    git push -u origin master
+  或手动在浏览器打开 https://github.com/Zengyi-Xu/DMT_PY_NN 上传。
