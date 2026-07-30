@@ -73,8 +73,14 @@ def step1_generate_qpsk_tx(use_awg: bool = False,
     print("\n========== STEP1: Generate QPSK TX ==========")
     tx_dict = generate_qpsk_tx(datano=config.DATANO_QPSK, cfg=get_cfg())
 
+    # 实际发射波形：pre_equ_flag==3 时优先使用预均衡波形
+    tx_out = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
+
     # 保存文件
     save_txt(config.TX_QPSK_FILE, tx_dict["tx_waveform"])
+    if tx_dict.get("tx_waveform_pre") is not None:
+        save_txt(config.TX_QPSK_PRE_FILE, tx_dict["tx_waveform_pre"])
+        print(f"Saved pre-equalized QPSK waveform to {config.TX_QPSK_PRE_FILE}")
     save_txt(config.ORIGIN_DEC_DATA_QPSK, tx_dict["origin_dec_data"], fmt="%d")
     save_mat(config.DEMOD_FILE_QPSK,
              qamdata_final=tx_dict["qamdata"],
@@ -104,7 +110,7 @@ def step1_generate_qpsk_tx(use_awg: bool = False,
                            run_id, "SNRest_QPSK_constellation")
 
     if use_awg:
-        quick_download_to_awg(tx_dict["tx_waveform"],
+        quick_download_to_awg(tx_out,
                               sample_rate=config.AWG_SAMPLE_RATE,
                               vpp=config.AWG_VPP,
                               visa_addr=config.M8190A_VISA_ADDR,
@@ -121,7 +127,8 @@ def step2_receive_qpsk(tx_dict: dict,
                        run_id: str = None):
     """STEP2: 接收 QPSK 波形并估计每载波 SNR."""
     print("\n========== STEP2: Receive QPSK & Estimate SNR ==========")
-    tx_waveform = tx_dict["tx_waveform"]
+    # 同步/参考优先使用预均衡波形（与 AWG 实际播放的信号一致）
+    tx_waveform = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
     if use_virtual_channel and offline:
         ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
@@ -193,8 +200,14 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
                                      datano=config.DATANO_BPL,
                                      cfg=get_cfg())
 
+    # 实际发射波形：pre_equ_flag==3 时优先使用预均衡波形
+    tx_out = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
+
     # 保存
     save_txt(config.TX_BPL_FILE, tx_dict["tx_waveform"])
+    if tx_dict.get("tx_waveform_pre") is not None:
+        save_txt(config.TX_BPL_PRE_FILE, tx_dict["tx_waveform_pre"])
+        print(f"Saved pre-equalized bitloading waveform to {config.TX_BPL_PRE_FILE}")
     save_txt(config.ORIGIN_DEC_DATA_BPL, tx_dict["origin_dec_data"], fmt="%d")
     save_mat(config.DEMOD_FILE_BPL,
              qamdata_final=tx_dict["qamdata"],
@@ -230,7 +243,7 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
                       run_id, "DMT_bitloading_Tx_spec")
 
     if use_awg:
-        quick_download_to_awg(tx_dict["tx_waveform"],
+        quick_download_to_awg(tx_out,
                               sample_rate=config.AWG_SAMPLE_RATE,
                               vpp=config.AWG_VPP,
                               visa_addr=config.M8190A_VISA_ADDR,
@@ -248,7 +261,8 @@ def step4_receive_bitloading(tx_dict: dict,
                              run_id: str = None):
     """STEP4: 接收 bitloading 波形并解调/计算 BER/SER."""
     print("\n========== STEP4: Receive Bitloading & Demodulate ==========")
-    tx_waveform = tx_dict["tx_waveform"]
+    # 同步/参考优先使用预均衡波形（与 AWG 实际播放的信号一致）
+    tx_waveform = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
     if use_virtual_channel and offline:
         ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)

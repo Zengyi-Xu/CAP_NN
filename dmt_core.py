@@ -2,6 +2,7 @@
 import numpy as np
 from scipy.special import erfc
 from scipy.ndimage import uniform_filter1d
+from scipy.optimize import curve_fit
 from pathlib import Path
 from typing import Tuple, Optional
 
@@ -429,6 +430,224 @@ def phase_recovery_from_pilots(Rx: np.ndarray,
 
 
 # -----------------------------------------------------------------------------
+# 预均衡权重生成 (port from MATLAB Pre.m, 输出 th7.txt)
+# -----------------------------------------------------------------------------
+def _exp2_fit(y: np.ndarray) -> np.ndarray:
+    """对序列做双指数拟合 a*exp(b*x)+c*exp(d*x) (等效 MATLAB cftool 'exp2').
+
+    与 createFit.m 一致: x 取 1..N。若拟合失败则退化为 3 次平滑样条。
+
+    注: Pre.m 中 method 1-4 使用的 createFit_VLC / createFit_VLC_inverse
+    原始文件已不可考, 这里统一用相同的 exp2 模型等效。
+    """
+    from scipy.interpolate import UnivariateSpline
+    y = np.asarray(y, dtype=float).ravel()
+    x = np.arange(1, len(y) + 1, dtype=float)
+
+    def exp2(x, a, b, c, d):
+        return a * np.exp(b * x) + c * np.exp(d * x)
+
+    scale = float(np.max(np.abs(y))) or 1.0
+    try:
+        popt, _ = curve_fit(exp2, x, y,
+                            p0=[scale, -5e-3, scale / 2, -7e-4],
+                            maxfev=20000)
+        return exp2(x, *popt)
+    except Exception:
+        spl = UnivariateSpline(x, y, k=3, s=len(y) * np.var(y) * 0.1)
+        return spl(x)
+
+
+def bridge_t_ii_1(f_center: float, f_half: float, decay_max_db: float,
+                  r_ref: float = 50.0) -> Tuple[float, float, float, float, float, float]:
+    """桥 T 均衡器 II 型设计 (port from MATLAB BridgeT_II_1.m).
+
+    Args:
+        f_center: 最小衰减中心频率 (Hz)
+        f_half: 半衰减带宽 (Hz)
+        decay_max_db: 最大衰减 (dB)
+        r_ref: 参考阻抗 (Ohm)
+
+    Returns:
+        (C11, L11, R11, C22, L22, R22), 其中 C 单位为 pF, L 单位为 nH (与 MATLAB 一致)
+    """
+    Fref = 1e6  # 归一化参考频率 1 MHz
+    Fcen_norm = f_center / Fref
+    Fhalf_norm = f_half / Fref
+
+    Decay_Line = 10 ** (decay_max_db / 10)
+    Decay_Line_half = 10 ** (decay_max_db / 2 / 10)
+    Decay_nat = 0.5 * np.log(Decay_Line)
+    Decay_nat_half = 0.5 * np.log(Decay_Line_half)
+    Fm = np.exp(2 * Decay_nat)
+    Fhalf_m = np.exp(2 * Decay_nat_half)
+
+    A2 = 1 / Fcen_norm ** 2
+    y_half = -np.sqrt((Fhalf_m - 1) / (Fm - 1))
+    A1 = (A2 - (1 / Fhalf_norm) ** 2) * Fhalf_norm / y_half
+    r11 = np.exp(Decay_nat) - 1
+    r21 = 1 / r11
+    alpha11 = (A2 / A1) * r11   # a11 = b21
+    beta11 = A1 / r11           # b11 = a21
+
+    L0 = r_ref / (2 * np.pi * Fref)
+    C0 = 1 / (2 * np.pi * Fref * r_ref)
+    C11 = beta11 * C0 * 1e12    # pF
+    L11 = alpha11 * L0 * 1e9    # nH
+    C22 = alpha11 * C0 * 1e12   # pF
+    L22 = beta11 * L0 * 1e9     # nH
+    R11 = r11 * r_ref
+    R22 = r21 * r_ref
+    return C11, L11, R11, C22, L22, R22
+
+
+def hardware_pre_response_db(fbegin: int = config.HW_PRE_FBEGIN,
+                             adb: float = config.HW_PRE_ADB,
+                             fcen_mhz: float = config.HW_PRE_FCEN_MHZ,
+                             fhalf_mhz: float = config.HW_PRE_FHALF_MHZ,
+                             fend: int = config.HW_PRE_FEND,
+                             r0: float = config.HW_PRE_R0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """计算桥 T 硬件预均衡的 dB 响应 (port from Pre.m case 5).
+
+    Returns:
+        f_mhz: 1..1000 MHz 频点
+        b_log: 全频段 (1 MHz-1 GHz, 1 MHz 步进) 的衰减响应 (dB, 负值)
+        f_use: 截取的有效频段 b_log(fbegin : fbegin+fend) (MATLAB 1 基索引)
+    """
+    C11, L11, R11, _, _, _ = bridge_t_ii_1(fcen_mhz * 1e6, fhalf_mhz * 1e6, adb, r0)
+    L_H = L11 * 1e-9   # nH -> H
+    C_F = C11 * 1e-12  # pF -> F
+
+    f = np.arange(1e6, 1e9 + 1, 1e6)  # 1M:1M:1G
+    w = 2 * np.pi * f
+    x11 = 1j * w * L_H + 1 / (1j * w * C_F)   # 串联 LC 阻抗
+    z11 = R11 * x11 / (R11 + x11)             # R11 与串联 LC 并联
+    b_line = np.abs((1 + z11 / r0) ** 2)
+    b_log = -10 * np.log10(b_line)
+    # MATLAB: f_use = b_log(Fbegin : Fbegin+Fend)  (1 基索引, 共 Fend+1 点)
+    f_use = b_log[fbegin - 1: fbegin + fend]
+    return f / 1e6, b_log, f_use
+
+
+def generate_preemphasis_weights(channel_mag: Optional[np.ndarray] = None,
+                                 method: int = config.PRE_METHOD,
+                                 equal_db: float = config.PRE_EQUAL_DB,
+                                 equal_db2: float = config.PRE_EQUAL_DB2,
+                                 hw_params: Optional[dict] = None,
+                                 n_subcarriers: Optional[int] = None,
+                                 save_path: Path = config.TH7_FILE,
+                                 save_curves: bool = True) -> np.ndarray:
+    """生成每个子载波的预均衡幅度权重并保存到 th7.txt (port from MATLAB Pre.m).
+
+    Args:
+        channel_mag: 信道幅度响应 |ha| (如 dmt_receiver 输出 channel_response 的幅度;
+                     多通道测量时可先求和, 对应 Pre.m 中 temp=ha2+ha3+ha4)。
+                     method 0-4 必须提供; method 5 仅用其长度, 缺省时用 n_subcarriers。
+        method: 0=normal fit; 1=inverse+normal; 2=cut off; 3=peak point;
+                4=peak point fit; 5=Hardware Pre (桥T均衡器响应)
+        equal_db: 截止/分段门限 (dB)
+        equal_db2: 第二门限 (仅 method=4)
+        hw_params: method=5 的硬件参数, 可覆盖 config 中 HW_PRE_* 键:
+                   fbegin, adb, fcen_mhz, fhalf_mhz, fend, r0
+        n_subcarriers: 未提供 channel_mag 时的权重长度 (默认 config.CARRIERNO1)
+        save_path: th7.txt 保存路径
+        save_curves: method=5 时是否同时保存 f_grid.txt / f_hardware_dB.txt
+
+    Returns:
+        temp3: 长度等于子载波数的线性幅度权重 (与 th7.txt 内容一致)
+    """
+    if channel_mag is not None:
+        temp = np.asarray(channel_mag, dtype=float).ravel()
+    else:
+        n = n_subcarriers or config.CARRIERNO1
+        temp = np.ones(n)  # 仅占位, method=5 只需长度
+    N = len(temp)
+
+    hw = {
+        "fbegin": config.HW_PRE_FBEGIN,
+        "adb": config.HW_PRE_ADB,
+        "fcen_mhz": config.HW_PRE_FCEN_MHZ,
+        "fhalf_mhz": config.HW_PRE_FHALF_MHZ,
+        "fend": config.HW_PRE_FEND,
+        "r0": config.HW_PRE_R0,
+    }
+    hw.update(hw_params or {})
+
+    def _inverse_db(v: np.ndarray, ref: str = "first") -> np.ndarray:
+        d = 20 * np.log10(1.0 / np.asarray(v, dtype=float))
+        return d - (d[0] if ref == "first" else d[-1])
+
+    def _cutoff_index(d: np.ndarray, thr: float) -> int:
+        """MATLAB: temp_index=find(d<-thr); count_index=temp_index(1)+1 (1 基)."""
+        idx = np.flatnonzero(d < -thr)
+        return int(idx[0]) + 1 if len(idx) else N
+
+    if method == 0:
+        # normal: exp2 拟合信道响应后开平方
+        temp2 = _exp2_fit(temp)
+        temp3 = temp2 ** 0.5
+
+    elif method == 1:
+        # inverse+normal: 对归一化到末端的逆响应 (dB) 拟合
+        d = _inverse_db(temp, ref="end")
+        temp2 = _exp2_fit(d)
+        temp2 = 1.0 / (10.0 ** (temp2 / 20))
+        temp3 = np.sqrt(np.abs(temp2))
+
+    elif method == 2:
+        # cut off: 仅拟合 -equal_db 门限以上部分, 其余补最小值
+        d = _inverse_db(temp, ref="first")
+        count_index = _cutoff_index(d, equal_db)
+        temp2 = _exp2_fit(temp[:count_index])
+        temp3 = np.sqrt(np.abs(temp2))
+        pad = np.full(N - count_index, np.min(temp3))
+        temp3 = np.concatenate([temp3, pad])
+
+    elif method == 3:
+        # peak point: 拟合逆响应, 以门限点为界分段开 5/8 与 1/8 次方
+        d = _inverse_db(temp, ref="first")
+        count_index = _cutoff_index(d, equal_db)
+        temp2 = _exp2_fit(d)
+        temp2 = 1.0 / (10.0 ** (temp2 / 20))
+        temp2 = temp2 / temp2[count_index - 1]
+        temp3 = np.concatenate([temp2[:count_index - 1] ** (5 / 8),
+                                temp2[count_index - 1:] ** (1 / 8)])
+
+    elif method == 4:
+        # peak point fit: 在拟合曲线上找门限点, 分段开 6/8 与 1/100 次方
+        d = _inverse_db(temp, ref="first")
+        temp2_db = _exp2_fit(d)
+        count_index = _cutoff_index(temp2_db, equal_db)
+        _cutoff_index(temp2_db, equal_db2)  # 与 MATLAB 一致仅作诊断
+        temp2 = 1.0 / (10.0 ** (temp2_db / 20))
+        temp2 = temp2 / temp2[count_index - 1]
+        temp3 = np.concatenate([temp2[:count_index - 1] ** (6 / 8),
+                                temp2[count_index - 1:] ** (1 / 100)])
+
+    elif method == 5:
+        # Hardware Pre: 桥 T 均衡器 dB 响应样条插值到子载波数
+        f_mhz, b_log, f_use = hardware_pre_response_db(**hw)
+        idx_src = np.arange(1, len(f_use) + 1, dtype=float)
+        idx_dst = np.linspace(1, len(f_use), N)
+        # MATLAB: f_use_right = spline(index_f_use, f_use, index_f_use_right)
+        from scipy.interpolate import CubicSpline
+        f_use_right = CubicSpline(idx_src, f_use)(idx_dst)
+        temp3 = 10.0 ** (f_use_right / 20)
+
+        if save_curves:
+            save_txt(config.F_GRID_FILE, f_mhz)
+            save_txt(config.HARDWARE_PRE_FILE, b_log)
+    else:
+        raise ValueError(f"Unknown PRE_METHOD: {method}")
+
+    temp3 = np.asarray(temp3, dtype=float).ravel()
+    save_txt(save_path, temp3)
+    print(f"Pre-emphasis weights (method={method}) saved to {save_path} "
+          f"(N={len(temp3)}, range=[{temp3.min():.4f}, {temp3.max():.4f}])")
+    return temp3
+
+
+# -----------------------------------------------------------------------------
 # DMT 调制
 # -----------------------------------------------------------------------------
 def generate_dmt_tx(RQ: np.ndarray,
@@ -533,10 +752,21 @@ def generate_dmt_tx(RQ: np.ndarray,
 
     # 硬件预均衡
     if pre_equ_flag == 3:
+        th7_path = Path(cfg.get("th7_file", config.TH7_FILE))
+        if not th7_path.exists():
+            # th7.txt 不存在时按 config.PRE_METHOD 自动生成 (port of MATLAB Pre.m)
+            print(f"{th7_path} not found, generating with PRE_METHOD={config.PRE_METHOD}")
+            generate_preemphasis_weights(
+                channel_mag=cfg.get("channel_mag", None),
+                method=cfg.get("pre_method", config.PRE_METHOD),
+                hw_params=cfg.get("hw_pre_params", None),
+                n_subcarriers=carrierno1,
+                save_path=th7_path,
+            )
         data_pre = apply_hardware_preEQ(np.real(dataifft1.reshape(-1, order="F")),
                                         cfg.get("awg_sample_rate", config.AWG_SAMPLE_RATE),
                                         upsampleno,
-                                        config.TH7_FILE)
+                                        th7_path)
         data_pre, dummy = add_dummy(data_pre, base=64)
         data_pre = center_normalize(data_pre)
         # 功率归一化

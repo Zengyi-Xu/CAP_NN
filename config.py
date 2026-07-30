@@ -65,6 +65,23 @@ PILOT_MESH_TIME_SPACING = 5          # 网状导频时间间隔
 PRE_EQU_FLAG = 3
 
 # -----------------------------------------------------------------------------
+# 预均衡权重生成 (与 MATLAB Pre.m 对应, 生成 th7.txt)
+# PRE_METHOD: 0=normal fit; 1=inverse+normal; 2=cut off; 3=peak point;
+#             4=peak point fit; 5=Hardware Pre (Bridge-T 均衡器响应)
+# -----------------------------------------------------------------------------
+PRE_METHOD = 5
+PRE_EQUAL_DB = 20                  # 截止/分段门限 (dB)
+PRE_EQUAL_DB2 = 20                 # 第二门限 (仅 method=4 诊断用)
+
+# Hardware Pre (method=5) 桥T均衡器参数, 与 Pre.m case 5 一致
+HW_PRE_FBEGIN = 1                  # 起始频点索引 (MHz)
+HW_PRE_ADB = 5                    # 最大衰减 (dB)
+HW_PRE_FCEN_MHZ = 600              # 中心频率 (MHz), <1000
+HW_PRE_FHALF_MHZ = 400             # 半衰减带宽 (MHz), <1000
+HW_PRE_FEND = 600                  # 结束频点 (MHz, 相对 FBEGIN)
+HW_PRE_R0 = 50                     # 参考阻抗 (Ohm)
+
+# -----------------------------------------------------------------------------
 # 采样率/硬件参数
 # -----------------------------------------------------------------------------
 AWG_SAMPLE_RATE = 8e9              # AWG 采样率 (Hz)
@@ -115,6 +132,7 @@ SNR_TABLE_TARGET_24E3 = DATA_DIR / "SNRtableTarget2dot4E_3.txt"
 QAMORDERALL_FILE = DATA_DIR / "QAMorderall.txt"
 TH7_FILE = DATA_DIR / "th7.txt"
 HARDWARE_PRE_FILE = DATA_DIR / "f_hardware_dB.txt"
+F_GRID_FILE = DATA_DIR / "f_grid.txt"
 
 ORIGIN_DEC_DATA_QPSK = DATA_DIR / "origin_dec_data_QPSK.txt"
 ORIGIN_DEC_DATA_BPL = DATA_DIR / "origin_dec_data.txt"
@@ -149,10 +167,10 @@ NN_MODEL_TEMP = NN_DIR / "trained_model_temp.pth"
 # -----------------------------------------------------------------------------
 PLOT_SHOW = True                   # 是否在 Spyder 中 plt.show() 显示图像
 PLOT_SAVE = False                  # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
-PLOT_DPI = 150                     # 保存图像分辨率
+PLOT_DPI = 300                     # 保存图像分辨率
 
-POSTEQ_FLAG = 1                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
-USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
+POSTEQ_FLAG = 0                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
+USE_NN = 0 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
 
 # -----------------------------------------------------------------------------
 # 运行模式
