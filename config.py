@@ -91,7 +91,7 @@ AWG_VPP = 0.5                      # AWG 输出幅度 (Vpp)
 # -----------------------------------------------------------------------------
 # 虚拟信道（用于无仪器时的调试/维护）
 # -----------------------------------------------------------------------------
-USE_VIRTUAL_CHANNEL = 0            # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
+USE_VIRTUAL_CHANNEL =   0          # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
 VIRTUAL_CHANNEL_FC = 0.8e9         # 一阶低通截止频率 (Hz)，模拟发射端高频衰减
 VIRTUAL_CHANNEL_SNR_DB = 20        # 接收机信噪比 (dB)，数值越高噪声越小
 VIRTUAL_CHANNEL_NONLINEARITY = 0.02  # 接收机三阶非线性系数
@@ -119,10 +119,13 @@ M8190A_PORT = 5025
 #   "DAC" - 直接 DAC 输出（未经放大，幅度最小）
 AWG_OUTPUT_ROUTE = "DC"
 
-# 示波器 USB-B (USBTMC) 资源字符串；留空则自动查找第一个 USB 仪器
-OSC_VISA_ADDR = "USB1::0x2A8D::0x9008::MY50400106::0::INSTR"                 # e.g. "USB0::0x0957::0x17A6::MY12345678::INSTR"
-OSC_CHANNEL = "CHAN1"              # 读取通道
-OSC_TIMEBASE_SCALE = 60e-6         # 时基 (s/div)
+# 示波器连接方式（与 MATLAB 一致，默认 TCPIP 端口 5025）：
+#   TCPIP Socket:  "TCPIP0::192.168.1.10::5025::SOCKET"
+#   USB-B/USBTMC:  "USB0::0x0957::0x17A6::MY12345678::INSTR"
+# 留空则自动查找第一个 USB 仪器
+OSC_VISA_ADDR = "TCPIP0::localhost::5025::SOCKET"
+OSC_CHANNEL = "CHAN2"              # MATLAB oscrunQPSK.m / oscrunDMT.m 均使用 CHAN2
+OSC_TIMEBASE_SCALE = 80e-6         # QPSK 探测时基 (s/div)，DMT bitloading 用 60e-6
 
 # -----------------------------------------------------------------------------
 # 文件路径
