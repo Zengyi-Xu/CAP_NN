@@ -1,4 +1,5 @@
 """通用工具函数：文件 I/O、同步、重采样、绘图等."""
+import json
 import os
 import numpy as np
 import scipy.signal as sg
@@ -55,6 +56,34 @@ def save_mat(path: Path, **kwargs) -> None:
         path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     sio.savemat(path, kwargs)
+
+
+def save_rx_config(rx_file: Path, **kwargs) -> Path:
+    """保存与接收波形对应的信号配置 JSON.
+
+    Args:
+        rx_file: 接收波形文件路径，如 rawOSC_QPSK_SNRest_0.txt
+        **kwargs: 需要记录的配置项
+
+    Returns:
+        保存的 JSON 文件路径，如 rawOSC_QPSK_SNRest_0_config.json
+    """
+    if isinstance(rx_file, str):
+        rx_file = Path(rx_file)
+    cfg_path = rx_file.parent / f"{rx_file.stem}_config.json"
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    # 确保可序列化
+    record = {}
+    for k, v in kwargs.items():
+        if isinstance(v, np.ndarray):
+            record[k] = v.tolist()
+        elif isinstance(v, Path):
+            record[k] = str(v)
+        else:
+            record[k] = v
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        json.dump(record, f, indent=2, ensure_ascii=False)
+    return cfg_path
 
 
 # -----------------------------------------------------------------------------

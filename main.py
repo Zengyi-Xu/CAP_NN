@@ -15,7 +15,7 @@ import argparse
 
 import matplotlib
 import config
-from utils import load_txt, save_txt, save_mat, sync_waveform, resample_signal
+from utils import load_txt, save_txt, save_mat, save_rx_config, sync_waveform, resample_signal
 from plot_adapter import (
     CODEPLOT_DIR,
     plot_time_waveform,
@@ -63,13 +63,6 @@ def _resolve_offline_rx_file(pattern: str) -> Path:
     )
 
 
-def _current_count() -> int:
-    """读取当前计数器，不存在则返回 0."""
-    if config.COUNT_FILE.exists():
-        return int(load_txt(config.COUNT_FILE))
-    return 0
-
-
 def get_cfg():
     """组装流程配置."""
     return {
@@ -103,13 +96,12 @@ def step1_generate_qpsk_tx(use_awg: bool = False,
     # 实际发射波形：pre_equ_flag==3 时优先使用预均衡波形
     tx_out = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
-    # 保存文件（按当前计数器编号，便于和 RX rawOSC 文件一一对应）
-    count = _current_count()
-    tx_qpsk_file = config.TXDATA_DIR / f"SNRest_QPSK_{count}.txt"
-    tx_qpsk_pre_file = config.TXDATA_DIR / f"pre_SNRest_QPSK_{count}.txt"
-    origin_dec_qpsk = config.DATA_DIR / f"origin_dec_data_QPSK_{count}.txt"
-    demod_qpsk = config.DATA_DIR / f"demodulationfile_QPSK_{count}.mat"
-    bitpower_qpsk = config.DATA_DIR / f"bitpowerInformation_QPSK_{count}.mat"
+    # 保存文件（固定文件名，不编号；RX 文件在保存时附带 config）
+    tx_qpsk_file = config.TX_QPSK_FILE
+    tx_qpsk_pre_file = config.TX_QPSK_PRE_FILE
+    origin_dec_qpsk = config.ORIGIN_DEC_DATA_QPSK
+    demod_qpsk = config.DEMOD_FILE_QPSK
+    bitpower_qpsk = config.BITPOWER_QPSK
 
     save_txt(tx_qpsk_file, tx_dict["tx_waveform"])
     if tx_dict.get("tx_waveform_pre") is not None:
@@ -184,6 +176,26 @@ def step2_receive_qpsk(tx_dict: dict,
             count = int(load_txt(config.COUNT_FILE))
         rx_file = config.RXDATA_DIR / f"rawOSC_QPSK_SNRest_{count}.txt"
         save_txt(rx_file, rx)
+        cfg_path = save_rx_config(
+            rx_file,
+            run_id=run_id,
+            stage="QPSK_SNR_est",
+            awg_sample_rate=config.AWG_SAMPLE_RATE,
+            osc_sample_rate=config.OSC_SAMPLE_RATE,
+            awg_vpp=config.AWG_VPP,
+            awg_output_route=config.AWG_OUTPUT_ROUTE,
+            scope_channel=config.OSC_CHANNEL,
+            timebase_scale=80e-6,
+            carrierno=config.CARRIERNO,
+            zeropad1=config.ZEROPAD1,
+            datano_qpsk=config.DATANO_QPSK,
+            trainingno=config.TRAININGNO,
+            pilot_pattern=config.PILOT_PATTERN,
+            pre_equ_flag=config.PRE_EQU_FLAG,
+            rx_length=len(rx),
+            count=count,
+        )
+        print(f"Saved RX config to {cfg_path}")
         save_txt(config.COUNT_FILE, np.array([count + 1]), fmt="%d")
 
     # 同步
@@ -233,14 +245,13 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
     # 实际发射波形：pre_equ_flag==3 时优先使用预均衡波形
     tx_out = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
-    # 保存（按当前计数器编号，便于和 RX rawOSC 文件一一对应）
-    count = _current_count()
-    tx_bpl_file = config.TXDATA_DIR / f"DMT_bitloading_Tx_QAM_{count}.txt"
-    tx_bpl_pre_file = config.TXDATA_DIR / f"pre_DMT_bitloading_Tx_QAM_{count}.txt"
-    origin_dec_bpl = config.DATA_DIR / f"origin_dec_data_{count}.txt"
-    demod_bpl = config.DATA_DIR / f"demodulationfile_{count}.mat"
-    bitpower_bpl = config.DATA_DIR / f"bitpowerInformation_{count}.mat"
-    qamorderall = config.DATA_DIR / f"QAMorderall_{count}.txt"
+    # 保存（固定文件名，不编号；RX 文件在保存时附带 config）
+    tx_bpl_file = config.TX_BPL_FILE
+    tx_bpl_pre_file = config.TX_BPL_PRE_FILE
+    origin_dec_bpl = config.ORIGIN_DEC_DATA_BPL
+    demod_bpl = config.DEMOD_FILE_BPL
+    bitpower_bpl = config.BITPOWER_BPL
+    qamorderall = config.QAMORDERALL_FILE
 
     save_txt(tx_bpl_file, tx_dict["tx_waveform"])
     if tx_dict.get("tx_waveform_pre") is not None:
@@ -322,6 +333,27 @@ def step4_receive_bitloading(tx_dict: dict,
             count = int(load_txt(config.COUNT_FILE))
         rx_file = config.RXDATA_DIR / f"rawOSC_DMT_{count}.txt"
         save_txt(rx_file, rx)
+        cfg_path = save_rx_config(
+            rx_file,
+            run_id=run_id,
+            stage="bitloading",
+            awg_sample_rate=config.AWG_SAMPLE_RATE,
+            osc_sample_rate=config.OSC_SAMPLE_RATE,
+            awg_vpp=config.AWG_VPP,
+            awg_output_route=config.AWG_OUTPUT_ROUTE,
+            scope_channel=config.OSC_CHANNEL,
+            timebase_scale=60e-6,
+            carrierno=config.CARRIERNO,
+            zeropad1=config.ZEROPAD1,
+            datano_bpl=config.DATANO_BPL,
+            trainingno=config.TRAININGNO,
+            pilot_pattern=config.PILOT_PATTERN,
+            pre_equ_flag=config.PRE_EQU_FLAG,
+            use_nn=use_nn,
+            rx_length=len(rx),
+            count=count,
+        )
+        print(f"Saved RX config to {cfg_path}")
         save_txt(config.COUNT_FILE, np.array([count + 1]), fmt="%d")
 
     # 同步

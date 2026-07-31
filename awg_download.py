@@ -17,8 +17,8 @@ port (default 5025), exactly as the MATLAB reference does with tcpclient().
 
 Usage:
     python awg_download.py
-    python awg_download.py --host 192.168.1.10 --port 5025 -f txdata/SNRest_QPSK.txt
-    python awg_download.py --route AC --amplitude 0.3 --ch1 --ch2
+    python awg_download.py --host 192.168.1.10 --port 5025 -f data/txdata/SNRest_QPSK.txt
+    python awg_download.py --route AC --amplitude 0.3
 """
 
 import argparse
@@ -31,13 +31,13 @@ from pathlib import Path
 import numpy as np
 
 # ---------------------------------------------------------------------------
-# Default parameters (matching the original MATLAB reference)
+# Default parameters
 # ---------------------------------------------------------------------------
 DEFAULT_HOST = "localhost"          # MATLAB: device_name = "DESKTOP-CION5EQ"
 DEFAULT_PORT = 5025                 # MATLAB RX_CHANNEL_SENSING_CONFIG.txt(9)
 DEFAULT_SAMPLE_RATE = 8e9           # Hz
 DEFAULT_AMPLITUDE = 0.5             # Vpp
-DEFAULT_WAVEFORM = r"C:\Users\Lab VLC\Desktop\PSCAP\txdata\datatx_pre_4QAM.txt"
+DEFAULT_WAVEFORM = Path(__file__).parent / "data" / "txdata" / "SNRest_QPSK.txt"
 DEFAULT_CONFIG_TXT = "RX_CHANNEL_SENSING_CONFIG.txt"
 
 # M8190A_12bit mode constants (from loadArbConfig.m)
