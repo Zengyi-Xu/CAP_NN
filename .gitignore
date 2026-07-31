@@ -35,5 +35,9 @@ data/plots/
 data/records/
 data/codeplot_assets/
 
+# 编辑器/调试产生的临时文件
+*.bak
+debug/反馈日志*.txt
+
 # 计数器
 data/count.txt
