@@ -41,7 +41,7 @@ def _write_script(script_dir: Path, name: str, code: str):
 
 def _display(script_code: str, script_path: Path):
     """在 Spyder 中显示图像（脚本里使用外部 fig 变量）."""
-    fig = plt.figure()
+    fig = plt.figure(dpi=config.PLOT_DPI)
     ns = {"fig": fig, "np": np, "plt": plt, "Path": Path,
           "__file__": str(script_path)}
     exec(script_code, ns)
@@ -125,15 +125,15 @@ _SNR_TEMPLATE = Template("""import numpy as np
 from pathlib import Path
 
 data = np.load(Path(__file__).parent.parent / "data" / "$data_name")
-est = data["est"]
-real = data["real"]
+est = 10 * np.log10(np.maximum(data["est"].astype(float), 1e-12))
+real = 10 * np.log10(np.maximum(data["real"].astype(float), 1e-12))
 
 ax = fig.add_subplot(111)
 ax.plot(est, "b", label="Est-SNR", marker="o", markersize=3, linewidth=1)
 ax.plot(real, "r", label="TestReal-SNR", marker="x", markersize=3, linewidth=1)
 ax.set_title("$title")
 ax.set_xlabel("Subcarrier")
-ax.set_ylabel("SNR")
+ax.set_ylabel("SNR (dB)")
 ax.legend()
 ax.grid(True, alpha=0.3)
 fig.tight_layout()
@@ -269,15 +269,11 @@ for idx, bits in enumerate(orders):
     hb = ax.hexbin(pts.real, pts.imag, gridsize=gridsize, cmap="GnBu", mincnt=1)
     fig.colorbar(hb, ax=ax, label="Density")
 
-    ideal_unique = np.unique(np.round(ideal, decimals=6))
-    ax.plot(ideal_unique.real, ideal_unique.imag, "c+", markersize=6, label="Ideal constellation")
-
     ax.set_title(f"{2**bits}-QAM (bits={bits})")
     ax.set_xlabel("I")
     ax.set_ylabel("Q")
     ax.axis("equal")
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right", fontsize=7)
 
 fig.suptitle("Constellation Density by Modulation Order", y=1.02)
 fig.tight_layout()
@@ -289,7 +285,6 @@ from pathlib import Path
 
 data = np.load(Path(__file__).parent.parent / "data" / "$data_name")
 out2 = data["out2"]
-in_ref = data["in_ref"]
 RQ = data["RQ"]
 pilot_mask = data["pilot_mask"]
 
@@ -301,29 +296,23 @@ for idx, bits in enumerate(orders):
     ax = fig.add_subplot(nrows, ncols, idx + 1)
     carriers = np.where(RQ == bits)[0]
     pts = []
-    ideal = []
     for n in carriers:
         valid = ~pilot_mask[n, :]
         if not np.any(valid):
             continue
         pts.append(out2[n, valid])
-        ideal.append(in_ref[n, valid])
     if not pts:
         ax.set_visible(False)
         continue
     pts = np.concatenate(pts)
-    ideal = np.concatenate(ideal)
 
     ax.plot(pts.real, pts.imag, "b.", alpha=0.3, markersize=3)
-    ideal_unique = np.unique(np.round(ideal, decimals=6))
-    ax.plot(ideal_unique.real, ideal_unique.imag, "r+", markersize=6, label="Ideal")
 
     ax.set_title(f"{2**bits}-QAM (bits={bits})")
     ax.set_xlabel("I")
     ax.set_ylabel("Q")
     ax.axis("equal")
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right", fontsize=7)
 
 fig.suptitle("RX Constellation by Modulation Order", y=1.02)
 fig.tight_layout()

@@ -163,8 +163,10 @@ def main():
         model.train()
         epoch_train_loss = 0.0
         
-        # 使用tqdm添加进度条
-        progress_bar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{config["epochs"]}', leave=False)
+        # 使用tqdm添加进度条（可通过环境变量 DISABLE_TQDM=1 关闭）
+        disable_tqdm = os.environ.get("DISABLE_TQDM", "0") == "1"
+        progress_bar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{config["epochs"]}',
+                            leave=False, disable=disable_tqdm)
         for inputs, targets in progress_bar:
             optimizer.zero_grad()
             outputs = model(inputs)

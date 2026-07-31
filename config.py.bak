@@ -65,23 +65,6 @@ PILOT_MESH_TIME_SPACING = 5          # 网状导频时间间隔
 PRE_EQU_FLAG = 3
 
 # -----------------------------------------------------------------------------
-# 预均衡权重生成 (与 MATLAB Pre.m 对应, 生成 th7.txt)
-# PRE_METHOD: 0=normal fit; 1=inverse+normal; 2=cut off; 3=peak point;
-#             4=peak point fit; 5=Hardware Pre (Bridge-T 均衡器响应)
-# -----------------------------------------------------------------------------
-PRE_METHOD = 5
-PRE_EQUAL_DB = 20                  # 截止/分段门限 (dB)
-PRE_EQUAL_DB2 = 20                 # 第二门限 (仅 method=4 诊断用)
-
-# Hardware Pre (method=5) 桥T均衡器参数, 与 Pre.m case 5 一致
-HW_PRE_FBEGIN = 1                  # 起始频点索引 (MHz)
-HW_PRE_ADB = 5                    # 最大衰减 (dB)
-HW_PRE_FCEN_MHZ = 600              # 中心频率 (MHz), <1000
-HW_PRE_FHALF_MHZ = 400             # 半衰减带宽 (MHz), <1000
-HW_PRE_FEND = 600                  # 结束频点 (MHz, 相对 FBEGIN)
-HW_PRE_R0 = 50                     # 参考阻抗 (Ohm)
-
-# -----------------------------------------------------------------------------
 # 采样率/硬件参数
 # -----------------------------------------------------------------------------
 AWG_SAMPLE_RATE = 8e9              # AWG 采样率 (Hz)
@@ -91,7 +74,7 @@ AWG_VPP = 0.5                      # AWG 输出幅度 (Vpp)
 # -----------------------------------------------------------------------------
 # 虚拟信道（用于无仪器时的调试/维护）
 # -----------------------------------------------------------------------------
-USE_VIRTUAL_CHANNEL = 0            # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
+USE_VIRTUAL_CHANNEL = 1            # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
 VIRTUAL_CHANNEL_FC = 0.8e9         # 一阶低通截止频率 (Hz)，模拟发射端高频衰减
 VIRTUAL_CHANNEL_SNR_DB = 20        # 接收机信噪比 (dB)，数值越高噪声越小
 VIRTUAL_CHANNEL_NONLINEARITY = 0.02  # 接收机三阶非线性系数
@@ -101,12 +84,12 @@ VIRTUAL_CHANNEL_ATTENUATION = 0.9  # 线性幅度衰减
 # -----------------------------------------------------------------------------
 # 硬件 VISA 地址
 # -----------------------------------------------------------------------------
-# M8190A: 默认通过 USB-PXI 接口连接；可改为其它 VISA 资源字符串
-M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR"
+# M8190A: 默认通过 TCPIP socket 连接；可改为其它 VISA 资源字符串
+M8190A_VISA_ADDR = "TCPIP0::localhost::5025::SOCKET"
 M8190A_PORT = 5025
 
 # 示波器 USB-B (USBTMC) 资源字符串；留空则自动查找第一个 USB 仪器
-OSC_VISA_ADDR = "USB0::0x2A8D::0x9008::MY50400106::0::INSTR"                 # e.g. "USB0::0x0957::0x17A6::MY12345678::INSTR"
+OSC_VISA_ADDR = ""                 # e.g. "USB0::0x0957::0x17A6::MY12345678::INSTR"
 OSC_CHANNEL = "CHAN2"              # 读取通道
 OSC_TIMEBASE_SCALE = 60e-6         # 时基 (s/div)
 
@@ -132,7 +115,6 @@ SNR_TABLE_TARGET_24E3 = DATA_DIR / "SNRtableTarget2dot4E_3.txt"
 QAMORDERALL_FILE = DATA_DIR / "QAMorderall.txt"
 TH7_FILE = DATA_DIR / "th7.txt"
 HARDWARE_PRE_FILE = DATA_DIR / "f_hardware_dB.txt"
-F_GRID_FILE = DATA_DIR / "f_grid.txt"
 
 ORIGIN_DEC_DATA_QPSK = DATA_DIR / "origin_dec_data_QPSK.txt"
 ORIGIN_DEC_DATA_BPL = DATA_DIR / "origin_dec_data.txt"
@@ -167,9 +149,9 @@ NN_MODEL_TEMP = NN_DIR / "trained_model_temp.pth"
 # -----------------------------------------------------------------------------
 PLOT_SHOW = True                   # 是否在 Spyder 中 plt.show() 显示图像
 PLOT_SAVE = False                  # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
-PLOT_DPI = 300                     # 默认图像分辨率（Spyder 显示与保存共用）
+PLOT_DPI = 300                     # 保存图像分辨率
 
-POSTEQ_FLAG = 1                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
+POSTEQ_FLAG = 3                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
 USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
 
 # -----------------------------------------------------------------------------

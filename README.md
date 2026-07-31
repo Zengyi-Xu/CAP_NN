@@ -74,7 +74,7 @@ python main.py --offline 1 --use-awg 0 --use-nn 1
 修改 `config.py` 中的 VISA 地址：
 
 ```python
-M8190A_VISA_ADDR = "TCPIP0::192.168.1.10::5025::SOCKET"
+M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR"
 OSC_VISA_ADDR = ""   # 留空自动查找第一个 USB 仪器
 ```
 
@@ -153,7 +153,6 @@ data/codeplot_assets/<run_id>/
 │   ├── DMT_bitloading_Rx_spec.npz
 │   ├── DMT_bitloading_nonlinearity.npz
 │   ├── SNR_compare.npz
-│   ├── bitloading_constellation.npz
 │   ├── ser_ber_per_carrier.npz
 │   ├── constellation_density.npz
 │   └── constellation_by_order.npz
@@ -173,12 +172,11 @@ data/codeplot_assets/<run_id>/
 | `SNRest_QPSK_time` / `SNRest_QPSK_spec` / `SNRest_QPSK_constellation` | QPSK TX 时域 / 频域 / 星座图 |
 | `SNRest_QPSK_rx_spec` | QPSK RX 频谱 |
 | `SNRest_QPSK_nonlinearity` | TX-RX 幅值非线性散点/密度图（蓝绿色 `GnBu`） |
-| `SNR_QPSK` | QPSK 阶段估计的每载波 SNR |
+| `SNR_QPSK` | QPSK 阶段估计的每载波 SNR（单位 dB） |
 | `bit_power_loading` | 每子载波 SNR、bit loading、power loading，并标注 ratio |
 | `DMT_bitloading_Tx_time` / `DMT_bitloading_Tx_spec` | Bitloading TX 时域 / 频谱 |
 | `DMT_bitloading_Rx_spec` / `DMT_bitloading_nonlinearity` | Bitloading RX 频谱 / 非线性 |
-| `SNR_compare` | QPSK 估计 SNR vs 最终恢复 SNR |
-| `bitloading_constellation` | 总接收星座图 |
+| `SNR_compare` | QPSK 估计 SNR vs 最终恢复 SNR（单位 dB） |
 | `constellation_density` | 按调制阶数分类的星座点密度热力图（蓝绿色 `GnBu`） |
 | `constellation_by_order` | 按调制阶数分类的 RX 星座散点图（每阶数一张子图） |
 | `ser_ber_per_carrier` | 每个子载波的 SER 与 BER |

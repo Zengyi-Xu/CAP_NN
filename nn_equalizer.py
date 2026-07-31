@@ -59,6 +59,7 @@ class NNEqualizer:
         # 构造环境变量
         env = os.environ.copy()
         env["MPLBACKEND"] = "Agg"  # 避免 plt.show() 阻塞
+        env["DISABLE_TQDM"] = "1"  # 关闭 NN 训练进度条
 
         # 子进程运行 NN 脚本
         cmd = [self.python_exe, str(self.script)]

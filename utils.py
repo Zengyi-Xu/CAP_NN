@@ -20,6 +20,9 @@ if config.PLOT_SHOW:
 
 import matplotlib.pyplot as plt
 
+# 统一默认分辨率
+matplotlib.rcParams["figure.dpi"] = config.PLOT_DPI
+
 
 # -----------------------------------------------------------------------------
 # 文件 I/O
@@ -225,14 +228,19 @@ def plot_constellation(iq: np.ndarray, title: str, out: Path = None,
     _finalize_figure(fig, out, show)
 
 
+def _snr_to_db(snr: np.ndarray) -> np.ndarray:
+    """把线性 SNR 转成 dB，避免 log(0)."""
+    return 10 * np.log10(np.maximum(np.asarray(snr, dtype=float), 1e-12))
+
+
 def plot_snrs(est: np.ndarray, real: np.ndarray, out: Path = None,
               show: bool = None) -> None:
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(est, "b", label="Est-SNR", marker="o")
-    ax.plot(real, "r", label="TestReal-SNR", marker="x")
+    ax.plot(_snr_to_db(est), "b", label="Est-SNR", marker="o")
+    ax.plot(_snr_to_db(real), "r", label="TestReal-SNR", marker="x")
     ax.set_title("Estimated vs Recovered SNR")
     ax.set_xlabel("Subcarrier")
-    ax.set_ylabel("SNR")
+    ax.set_ylabel("SNR (dB)")
     ax.legend()
     ax.grid(True)
     _finalize_figure(fig, out, show)
@@ -388,35 +396,26 @@ def plot_constellation_density(out2: np.ndarray,
         ax = axes[idx // ncols, idx % ncols]
         carriers = np.where(RQ == bits)[0]
         pts = []
-        ideal = []
         for n in carriers:
             valid = ~pilot_mask[n, :]
             if not np.any(valid):
                 continue
             pts.append(out2[n, valid])
-            ideal.append(in_ref[n, valid])
         if not pts:
             ax.set_visible(False)
             continue
         pts = np.concatenate(pts)
-        ideal = np.concatenate(ideal)
 
         # 星座点密度：hexbin
         hb = ax.hexbin(pts.real, pts.imag, gridsize=max(30, 2 * int(2 ** (bits / 2))),
                        cmap="GnBu", mincnt=1)
         fig.colorbar(hb, ax=ax, label="Density")
 
-        # 叠加理想星座点（取发送符号的 unique 值）
-        ideal_unique = np.unique(np.round(ideal, decimals=6))
-        ax.plot(ideal_unique.real, ideal_unique.imag, "c+", markersize=6,
-                label="Ideal constellation")
-
         ax.set_title(f"{2**bits}-QAM (bits={bits}, carriers={len(carriers)})")
         ax.set_xlabel("I")
         ax.set_ylabel("Q")
         ax.axis("equal")
         ax.grid(True)
-        ax.legend(loc="upper right", fontsize=7)
 
     # 隐藏未使用的子图
     for idx in range(len(orders), nrows * ncols):
@@ -463,30 +462,23 @@ def plot_constellation_by_order(out2: np.ndarray,
         ax = axes[idx // ncols, idx % ncols]
         carriers = np.where(RQ == bits)[0]
         pts = []
-        ideal = []
         for n in carriers:
             valid = ~pilot_mask[n, :]
             if not np.any(valid):
                 continue
             pts.append(out2[n, valid])
-            ideal.append(in_ref[n, valid])
         if not pts:
             ax.set_visible(False)
             continue
         pts = np.concatenate(pts)
-        ideal = np.concatenate(ideal)
 
         ax.plot(pts.real, pts.imag, "b.", alpha=0.3, markersize=3)
-        ideal_unique = np.unique(np.round(ideal, decimals=6))
-        ax.plot(ideal_unique.real, ideal_unique.imag, "r+", markersize=6,
-                label="Ideal constellation")
 
         ax.set_title(f"{2**bits}-QAM (bits={bits}, carriers={len(carriers)})")
         ax.set_xlabel("I")
         ax.set_ylabel("Q")
         ax.axis("equal")
         ax.grid(True)
-        ax.legend(loc="upper right", fontsize=7)
 
     # 隐藏未使用的子图
     for idx in range(len(orders), nrows * ncols):
