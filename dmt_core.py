@@ -989,12 +989,14 @@ def dmt_receiver(rx_waveform: np.ndarray,
     out3 = out2_temp * AVT
 
     # 计算 SNR（跳过导频位置）
+    # 与 MATLAB 保持一致：SNR = mean(|in|^2) / mean(|out2 - in|^2)
+    # 即发送信号功率 / 误差功率（1/EVM^2）
     SNR_R = np.full(carrierno1, np.nan)
     for n in range(carrierno1):
         valid = ~pilot_mask[n, :]
         if not np.any(valid):
             continue
-        sig_pow = np.mean(np.abs(out2_denorm[n, valid]) ** 2)
+        sig_pow = np.mean(np.abs(in_denorm[n, valid]) ** 2)
         err_pow = np.mean(np.abs(out2_denorm[n, valid] - in_denorm[n, valid]) ** 2)
         if err_pow == 0 or not np.isfinite(err_pow):
             SNR_R[n] = 1e12

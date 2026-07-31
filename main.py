@@ -63,6 +63,14 @@ def _resolve_offline_rx_file(pattern: str) -> Path:
     )
 
 
+def _save_virtual_rx(rx: np.ndarray, tag: str, run_id: str) -> Path:
+    """保存虚拟信道生成的 RX 波形到 rxdata，便于后续复用与排查."""
+    out = config.RXDATA_DIR / f"virtual_{tag}_{run_id}.txt"
+    save_txt(out, rx)
+    print(f"Saved virtual-channel RX to {out}")
+    return out
+
+
 def get_cfg():
     """组装流程配置."""
     return {
@@ -158,22 +166,29 @@ def step2_receive_qpsk(tx_dict: dict,
     # 同步/参考优先使用预均衡波形（与 AWG 实际播放的信号一致）
     tx_waveform = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
+    rx_source = "unknown"
     if use_virtual_channel and offline:
         ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
         rx = ch.apply(tx_waveform)
+        rx_source = "virtual_channel"
         print("Generated RX via virtual channel")
+        _save_virtual_rx(rx, "QPSK_SNRest", run_id)
     elif offline:
         try:
             if rx_file is None:
                 rx_file = _resolve_offline_rx_file("rawOSC_QPSK_SNRest_*.txt")
             rx = load_txt(rx_file)
+            rx_source = "measured_offline"
             print(f"Loaded offline RX data from {rx_file}")
         except FileNotFoundError:
             print("[WARN] Offline QPSK RX file not found, falling back to virtual channel")
             ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
             rx = ch.apply(tx_waveform)
+            rx_source = "virtual_channel"
             print("Generated RX via virtual channel")
+            _save_virtual_rx(rx, "QPSK_SNRest", run_id)
     else:
+        rx_source = "measured_online"
         with KeysightScopeUSB(resource=config.OSC_VISA_ADDR) as scope:
             rx, _ = scope.capture(channel=config.OSC_CHANNEL,
                                   sample_rate=config.OSC_SAMPLE_RATE,
@@ -225,14 +240,14 @@ def step2_receive_qpsk(tx_dict: dict,
     if config.PLOT_SHOW:
         plot_spectrum(rx_sync,
                       config.AWG_SAMPLE_RATE,
-                      f"QPSK RX Spectrum ({run_id})",
+                      f"QPSK RX Spectrum [{rx_source}] ({run_id})",
                       run_id, "SNRest_QPSK_rx_spec")
         plot_tx_rx_nonlinearity(tx_waveform,
                                 rx_sync,
-                                f"QPSK TX-RX Nonlinearity ({run_id})",
+                                f"QPSK TX-RX Nonlinearity [{rx_source}] ({run_id})",
                                 run_id, "SNRest_QPSK_nonlinearity")
         plot_snrs(snrs, snrs,
-                  f"Estimated SNR (dB) ({run_id})",
+                  f"Estimated SNR (dB) [{rx_source}] ({run_id})",
                   run_id, "SNR_QPSK")
 
     return snrs, rx_sync
@@ -323,22 +338,29 @@ def step4_receive_bitloading(tx_dict: dict,
     # 同步/参考优先使用预均衡波形（与 AWG 实际播放的信号一致）
     tx_waveform = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
+    rx_source = "unknown"
     if use_virtual_channel and offline:
         ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
         rx = ch.apply(tx_waveform)
+        rx_source = "virtual_channel"
         print("Generated RX via virtual channel")
+        _save_virtual_rx(rx, "DMT_bitloading", run_id)
     elif offline:
         try:
             if rx_file is None:
                 rx_file = _resolve_offline_rx_file("rawOSC_DMT_*.txt")
             rx = load_txt(rx_file)
+            rx_source = "measured_offline"
             print(f"Loaded offline RX data from {rx_file}")
         except FileNotFoundError:
             print("[WARN] Offline bitloading RX file not found, falling back to virtual channel")
             ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
             rx = ch.apply(tx_waveform)
+            rx_source = "virtual_channel"
             print("Generated RX via virtual channel")
+            _save_virtual_rx(rx, "DMT_bitloading", run_id)
     else:
+        rx_source = "measured_online"
         with KeysightScopeUSB(resource=config.OSC_VISA_ADDR) as scope:
             rx, _ = scope.capture(channel=config.OSC_CHANNEL,
                                   sample_rate=config.OSC_SAMPLE_RATE,
@@ -401,34 +423,34 @@ def step4_receive_bitloading(tx_dict: dict,
     if config.PLOT_SHOW:
         plot_spectrum(rx_sync,
                       config.AWG_SAMPLE_RATE,
-                      f"Bitloading RX Spectrum ({run_id})",
+                      f"Bitloading RX Spectrum [{rx_source}] ({run_id})",
                       run_id, "DMT_bitloading_Rx_spec")
         plot_tx_rx_nonlinearity(tx_waveform,
                                 rx_sync,
-                                f"Bitloading TX-RX Nonlinearity ({run_id})",
+                                f"Bitloading TX-RX Nonlinearity [{rx_source}] ({run_id})",
                                 run_id, "DMT_bitloading_nonlinearity")
         plot_snrs(load_txt(config.FINAL_SNR_QPSK),
                   res["SNR_R"],
-                  f"Estimated vs Recovered SNR (dB) ({run_id})",
+                  f"Estimated vs Recovered SNR (dB) [{rx_source}] ({run_id})",
                   run_id, "SNR_compare")
         plot_ser_ber_per_carrier(res["ser_per_carrier"],
                                  res["ber_per_carrier"],
                                  RQ=tx_dict.get("RQ"),
-                                 title=f"SER/BER per Subcarrier ({run_id})",
+                                 title=f"SER/BER per Subcarrier [{rx_source}] ({run_id})",
                                  run_id=run_id,
                                  name="ser_ber_per_carrier")
         plot_constellation_density(res["out2"],
                                    res["in_ref"],
                                    tx_dict["RQ"],
                                    pilot_mask=res["pilot_mask"],
-                                   title=f"Constellation Density ({run_id})",
+                                   title=f"Constellation Density [{rx_source}] ({run_id})",
                                    run_id=run_id,
                                    name="constellation_density")
         plot_constellation_by_order(res["out2"],
                                     res["in_ref"],
                                     tx_dict["RQ"],
                                     pilot_mask=res["pilot_mask"],
-                                    title=f"RX Constellation by Order ({run_id})",
+                                    title=f"RX Constellation by Order [{rx_source}] ({run_id})",
                                     run_id=run_id,
                                     name="constellation_by_order")
 

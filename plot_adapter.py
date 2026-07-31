@@ -92,7 +92,8 @@ fs = float(data["fs"])
 
 n = len(sig)
 freqs = np.fft.fftshift(np.fft.fftfreq(n, d=1.0 / fs))
-spec = 20 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
+# 与 MATLAB 保持一致：10*log10(abs(fft(sig)))
+spec = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
 
 ax = fig.add_subplot(111)
 ax.plot(freqs / 1e9, spec, "b-", linewidth=1)

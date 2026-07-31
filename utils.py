@@ -235,7 +235,8 @@ def plot_spectrum(sig: np.ndarray, fs: float, title: str, out: Path = None,
                   show: bool = None) -> None:
     n = len(sig)
     freqs = np.fft.fftshift(np.fft.fftfreq(n, d=1.0 / fs))
-    spec = 20 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
+    # 与 MATLAB 保持一致：10*log10(abs(fft(sig)))
+    spec = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(freqs, spec, "b-")
     ax.set_title(title)
