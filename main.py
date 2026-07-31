@@ -43,6 +43,33 @@ from virtual_channel import VirtualChannel
 from record import generate_run_id, save_record
 
 
+def _resolve_offline_rx_file(pattern: str) -> Path:
+    """离线模式下定位 RX 文件：先按 count.txt，没有再按修改时间找最新的匹配文件."""
+    count = 0
+    if config.COUNT_FILE.exists():
+        count = int(load_txt(config.COUNT_FILE))
+    candidate = config.RXDATA_DIR / pattern.replace("*", str(count))
+    if candidate.exists():
+        return candidate
+    matches = sorted(config.RXDATA_DIR.glob(pattern),
+                     key=lambda p: p.stat().st_mtime, reverse=True)
+    if matches:
+        print(f"Count-based file {candidate} not found, using latest match: {matches[0]}")
+        return matches[0]
+    raise FileNotFoundError(
+        f"Offline RX file not found: {candidate}\n"
+        f"  Searched pattern: {config.RXDATA_DIR / pattern}\n"
+        f"  Hint: use --use-virtual-channel 1, or provide --qpsk-rx / --bpl-rx path."
+    )
+
+
+def _current_count() -> int:
+    """读取当前计数器，不存在则返回 0."""
+    if config.COUNT_FILE.exists():
+        return int(load_txt(config.COUNT_FILE))
+    return 0
+
+
 def get_cfg():
     """组装流程配置."""
     return {
@@ -76,22 +103,29 @@ def step1_generate_qpsk_tx(use_awg: bool = False,
     # 实际发射波形：pre_equ_flag==3 时优先使用预均衡波形
     tx_out = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
-    # 保存文件
-    save_txt(config.TX_QPSK_FILE, tx_dict["tx_waveform"])
+    # 保存文件（按当前计数器编号，便于和 RX rawOSC 文件一一对应）
+    count = _current_count()
+    tx_qpsk_file = config.TXDATA_DIR / f"SNRest_QPSK_{count}.txt"
+    tx_qpsk_pre_file = config.TXDATA_DIR / f"pre_SNRest_QPSK_{count}.txt"
+    origin_dec_qpsk = config.DATA_DIR / f"origin_dec_data_QPSK_{count}.txt"
+    demod_qpsk = config.DATA_DIR / f"demodulationfile_QPSK_{count}.mat"
+    bitpower_qpsk = config.DATA_DIR / f"bitpowerInformation_QPSK_{count}.mat"
+
+    save_txt(tx_qpsk_file, tx_dict["tx_waveform"])
     if tx_dict.get("tx_waveform_pre") is not None:
-        save_txt(config.TX_QPSK_PRE_FILE, tx_dict["tx_waveform_pre"])
-        print(f"Saved pre-equalized QPSK waveform to {config.TX_QPSK_PRE_FILE}")
-    save_txt(config.ORIGIN_DEC_DATA_QPSK, tx_dict["origin_dec_data"], fmt="%d")
-    save_mat(config.DEMOD_FILE_QPSK,
+        save_txt(tx_qpsk_pre_file, tx_dict["tx_waveform_pre"])
+        print(f"Saved pre-equalized QPSK waveform to {tx_qpsk_pre_file}")
+    save_txt(origin_dec_qpsk, tx_dict["origin_dec_data"], fmt="%d")
+    save_mat(demod_qpsk,
              qamdata_final=tx_dict["qamdata"],
              AVT=tx_dict["AVT"])
-    save_mat(config.BITPOWER_QPSK,
+    save_mat(bitpower_qpsk,
              S=np.ones(config.CARRIERNO1),
              RQ=np.full(config.CARRIERNO1, 2, dtype=int))
     save_txt(config.WAVEFORM_DUMMY_LEN,
              np.array([tx_dict["waveform_dummy_len"]]), fmt="%d")
 
-    print(f"Saved TX QPSK waveform to {config.TX_QPSK_FILE}")
+    print(f"Saved TX QPSK waveform to {tx_qpsk_file}")
     print(f"  waveform length = {len(tx_dict['tx_waveform'])}, dummy = {tx_dict['waveform_dummy_len']}")
 
     # 画图
@@ -136,11 +170,7 @@ def step2_receive_qpsk(tx_dict: dict,
         print("Generated RX via virtual channel")
     elif offline:
         if rx_file is None:
-            # 默认读取 rawOSC_QPSK_SNRest_{count}.txt
-            count = 0
-            if config.COUNT_FILE.exists():
-                count = int(load_txt(config.COUNT_FILE))
-            rx_file = config.RXDATA_DIR / f"rawOSC_QPSK_SNRest_{count}.txt"
+            rx_file = _resolve_offline_rx_file("rawOSC_QPSK_SNRest_*.txt")
         rx = load_txt(rx_file)
         print(f"Loaded offline RX data from {rx_file}")
     else:
@@ -203,21 +233,29 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
     # 实际发射波形：pre_equ_flag==3 时优先使用预均衡波形
     tx_out = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
 
-    # 保存
-    save_txt(config.TX_BPL_FILE, tx_dict["tx_waveform"])
+    # 保存（按当前计数器编号，便于和 RX rawOSC 文件一一对应）
+    count = _current_count()
+    tx_bpl_file = config.TXDATA_DIR / f"DMT_bitloading_Tx_QAM_{count}.txt"
+    tx_bpl_pre_file = config.TXDATA_DIR / f"pre_DMT_bitloading_Tx_QAM_{count}.txt"
+    origin_dec_bpl = config.DATA_DIR / f"origin_dec_data_{count}.txt"
+    demod_bpl = config.DATA_DIR / f"demodulationfile_{count}.mat"
+    bitpower_bpl = config.DATA_DIR / f"bitpowerInformation_{count}.mat"
+    qamorderall = config.DATA_DIR / f"QAMorderall_{count}.txt"
+
+    save_txt(tx_bpl_file, tx_dict["tx_waveform"])
     if tx_dict.get("tx_waveform_pre") is not None:
-        save_txt(config.TX_BPL_PRE_FILE, tx_dict["tx_waveform_pre"])
-        print(f"Saved pre-equalized bitloading waveform to {config.TX_BPL_PRE_FILE}")
-    save_txt(config.ORIGIN_DEC_DATA_BPL, tx_dict["origin_dec_data"], fmt="%d")
-    save_mat(config.DEMOD_FILE_BPL,
+        save_txt(tx_bpl_pre_file, tx_dict["tx_waveform_pre"])
+        print(f"Saved pre-equalized bitloading waveform to {tx_bpl_pre_file}")
+    save_txt(origin_dec_bpl, tx_dict["origin_dec_data"], fmt="%d")
+    save_mat(demod_bpl,
              qamdata_final=tx_dict["qamdata"],
              AVT=tx_dict["AVT"])
-    save_mat(config.BITPOWER_BPL,
+    save_mat(bitpower_bpl,
              S=tx_dict["S"],
              RQ=tx_dict["RQ"])
-    save_txt(config.QAMORDERALL_FILE, tx_dict["RQ"], fmt="%d")
+    save_txt(qamorderall, tx_dict["RQ"], fmt="%d")
 
-    print(f"Saved TX bitloading waveform to {config.TX_BPL_FILE}")
+    print(f"Saved TX bitloading waveform to {tx_bpl_file}")
     print(f"  waveform length = {len(tx_dict['tx_waveform'])}, dummy = {tx_dict['waveform_dummy_len']}")
 
     # 画图：比特功率加载
@@ -270,10 +308,7 @@ def step4_receive_bitloading(tx_dict: dict,
         print("Generated RX via virtual channel")
     elif offline:
         if rx_file is None:
-            count = 0
-            if config.COUNT_FILE.exists():
-                count = int(load_txt(config.COUNT_FILE))
-            rx_file = config.RXDATA_DIR / f"rawOSC_DMT_{count}.txt"
+            rx_file = _resolve_offline_rx_file("rawOSC_DMT_*.txt")
         rx = load_txt(rx_file)
         print(f"Loaded offline RX data from {rx_file}")
     else:

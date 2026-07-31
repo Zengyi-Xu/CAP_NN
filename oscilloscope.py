@@ -105,9 +105,17 @@ class KeysightScopeUSB:
         self.write(":STOP")
         self.write(f":ACQUIRE:SRATE {sample_rate:.15g}")
         self.write(f":TIMEBASE:SCALE {timebase_scale:.15g}")
+        # 固定采集点数，确保能覆盖完整 DMT 波形（4M 点 @ 10 GSa/s = 400 us）
+        try:
+            self.write(":ACQUIRE:POINTS:AUTO OFF")
+            self.write(":ACQUIRE:POINTS 4000000")
+            self.write(":WAVEFORM:POINTS:MODE RAW")
+            self.write(":WAVEFORM:POINTS 4000000")
+        except Exception:
+            pass
         self.write(":WAVEFORM:FORMAT WORD")
         self.write(":WAVEFORM:BYTEORDER LSBFirst")
-        print(f"Scope configured: fs={sample_rate/1e9:.2f} GSa/s, timebase={timebase_scale*1e6:.1f} us/div")
+        print(f"Scope configured: fs={sample_rate/1e9:.2f} GSa/s, timebase={timebase_scale*1e6:.1f} us/div, points=4000000")
 
     def read_preamble(self, channel: Optional[str] = None) -> dict:
         """读取并解析 :WAVEFORM:PREAMBLE?"""
