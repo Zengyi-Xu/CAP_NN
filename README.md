@@ -74,7 +74,7 @@ python main.py --offline 1 --use-awg 0 --use-nn 1
 修改 `config.py` 中的 VISA 地址：
 
 ```python
-M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR"
+M8190A_VISA_ADDR = "TCPIP0::192.168.1.10::5025::SOCKET"  # 改成 M8190A 实际 IP
 OSC_VISA_ADDR = ""   # 留空自动查找第一个 USB 仪器
 ```
 

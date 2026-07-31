@@ -32,6 +32,8 @@ class M8190AController:
                 - "AC": AC 耦合放大输出（隔直，射频/IF 常用）
                 - "DAC": 直接 DAC 输出（未经放大，幅度最小）
             timeout_ms: 通信超时
+
+        默认通过 TCPIP 端口 5025 连接 M8190A（与原始 MATLAB 方式一致）。
         """
         self.visa_addr = visa_addr or config.M8190A_VISA_ADDR
         self.sample_rate = sample_rate
