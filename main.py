@@ -163,10 +163,16 @@ def step2_receive_qpsk(tx_dict: dict,
         rx = ch.apply(tx_waveform)
         print("Generated RX via virtual channel")
     elif offline:
-        if rx_file is None:
-            rx_file = _resolve_offline_rx_file("rawOSC_QPSK_SNRest_*.txt")
-        rx = load_txt(rx_file)
-        print(f"Loaded offline RX data from {rx_file}")
+        try:
+            if rx_file is None:
+                rx_file = _resolve_offline_rx_file("rawOSC_QPSK_SNRest_*.txt")
+            rx = load_txt(rx_file)
+            print(f"Loaded offline RX data from {rx_file}")
+        except FileNotFoundError:
+            print("[WARN] Offline QPSK RX file not found, falling back to virtual channel")
+            ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
+            rx = ch.apply(tx_waveform)
+            print("Generated RX via virtual channel")
     else:
         with KeysightScopeUSB(resource=config.OSC_VISA_ADDR) as scope:
             rx, _ = scope.capture(channel=config.OSC_CHANNEL,
@@ -322,10 +328,16 @@ def step4_receive_bitloading(tx_dict: dict,
         rx = ch.apply(tx_waveform)
         print("Generated RX via virtual channel")
     elif offline:
-        if rx_file is None:
-            rx_file = _resolve_offline_rx_file("rawOSC_DMT_*.txt")
-        rx = load_txt(rx_file)
-        print(f"Loaded offline RX data from {rx_file}")
+        try:
+            if rx_file is None:
+                rx_file = _resolve_offline_rx_file("rawOSC_DMT_*.txt")
+            rx = load_txt(rx_file)
+            print(f"Loaded offline RX data from {rx_file}")
+        except FileNotFoundError:
+            print("[WARN] Offline bitloading RX file not found, falling back to virtual channel")
+            ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
+            rx = ch.apply(tx_waveform)
+            print("Generated RX via virtual channel")
     else:
         with KeysightScopeUSB(resource=config.OSC_VISA_ADDR) as scope:
             rx, _ = scope.capture(channel=config.OSC_CHANNEL,
