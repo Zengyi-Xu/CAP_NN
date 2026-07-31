@@ -189,6 +189,7 @@ def step2_receive_qpsk(tx_dict: dict,
             _save_virtual_rx(rx, "QPSK_SNRest", run_id)
     else:
         rx_source = "measured_online"
+        print(f"[SCOPE] Capturing QPSK RX from {config.OSC_VISA_ADDR}, channel {config.OSC_CHANNEL}")
         with KeysightScopeUSB(resource=config.OSC_VISA_ADDR) as scope:
             rx, _ = scope.capture(channel=config.OSC_CHANNEL,
                                   sample_rate=config.OSC_SAMPLE_RATE,
@@ -361,6 +362,7 @@ def step4_receive_bitloading(tx_dict: dict,
             _save_virtual_rx(rx, "DMT_bitloading", run_id)
     else:
         rx_source = "measured_online"
+        print(f"[SCOPE] Capturing bitloading RX from {config.OSC_VISA_ADDR}, channel {config.OSC_CHANNEL}")
         with KeysightScopeUSB(resource=config.OSC_VISA_ADDR) as scope:
             rx, _ = scope.capture(channel=config.OSC_CHANNEL,
                                   sample_rate=config.OSC_SAMPLE_RATE,
@@ -457,7 +459,7 @@ def step4_receive_bitloading(tx_dict: dict,
     return res
 
 
-def run_full_pipeline(offline: bool = True,
+def run_full_pipeline(offline: bool = False,
                       use_awg: bool = False,
                       use_nn: bool = False,
                       use_virtual_channel: bool = False,
@@ -472,7 +474,10 @@ def run_full_pipeline(offline: bool = True,
     if config.PLOT_SAVE:
         plot_dir = config.PLOT_DIR / run_id
         plot_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\n>>> Run ID: {run_id}")
+    mode_str = "OFFLINE" if offline else "ONLINE"
+    print(f"\n========== DMT Pipeline [{mode_str}] ==========")
+    print(f">>> Run ID: {run_id}")
+    print(f">>> Mode: {mode_str} (offline={offline}, use_awg={use_awg}, use_nn={use_nn}, use_virtual_channel={use_virtual_channel})")
     if config.PLOT_SHOW:
         print(f">>> Matplotlib backend: {matplotlib.get_backend()}")
     assets_dir = CODEPLOT_DIR / run_id
@@ -540,8 +545,8 @@ def run_full_pipeline(offline: bool = True,
 
 def main():
     parser = argparse.ArgumentParser(description="DMT Python Pipeline")
-    parser.add_argument("--offline", type=int, default=1,
-                        help="1=offline (read files), 0=online (AWG+Scope)")
+    parser.add_argument("--offline", type=int, default=0,
+                        help="1=offline (read files), 0=online AWG+Scope (default: 0)")
     parser.add_argument("--use-awg", type=int, default=0,
                         help="1=download waveform to M8190A")
     parser.add_argument("--use-nn", type=int, default=config.USE_NN,
@@ -574,6 +579,9 @@ def main():
     if config.PLOT_SAVE:
         plot_dir = config.PLOT_DIR / run_id
         plot_dir.mkdir(parents=True, exist_ok=True)
+
+    mode_str = "OFFLINE" if offline else "ONLINE"
+    print(f"\n========== DMT Pipeline [{mode_str}] ==========")
 
     if args.step == "all":
         run_full_pipeline(offline=offline,
