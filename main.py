@@ -36,7 +36,7 @@ from dmt_core import (
     load_snr_table,
     assign_qam_order_from_snr,
 )
-from awg_m8190a import M8190AController, quick_download_to_awg
+from awg_download import download_to_awg, parse_tcpip_visa
 from oscilloscope import KeysightScopeUSB
 from nn_equalizer import run_nn_equalizer
 from virtual_channel import VirtualChannel
@@ -136,11 +136,13 @@ def step1_generate_qpsk_tx(use_awg: bool = False,
                            run_id, "SNRest_QPSK_constellation")
 
     if use_awg:
-        quick_download_to_awg(tx_out,
-                              sample_rate=config.AWG_SAMPLE_RATE,
-                              vpp=config.AWG_VPP,
-                              visa_addr=config.M8190A_VISA_ADDR,
-                              channel=1)
+        host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
+        download_to_awg(tx_out,
+                        fs=config.AWG_SAMPLE_RATE,
+                        vpp=config.AWG_VPP,
+                        host=host,
+                        port=port,
+                        route=config.AWG_OUTPUT_ROUTE)
 
     return tx_dict
 
@@ -292,11 +294,13 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
                       run_id, "DMT_bitloading_Tx_spec")
 
     if use_awg:
-        quick_download_to_awg(tx_out,
-                              sample_rate=config.AWG_SAMPLE_RATE,
-                              vpp=config.AWG_VPP,
-                              visa_addr=config.M8190A_VISA_ADDR,
-                              channel=1)
+        host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
+        download_to_awg(tx_out,
+                        fs=config.AWG_SAMPLE_RATE,
+                        vpp=config.AWG_VPP,
+                        host=host,
+                        port=port,
+                        route=config.AWG_OUTPUT_ROUTE)
 
     return tx_dict
 

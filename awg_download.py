@@ -514,6 +514,55 @@ def download(iqdata: np.ndarray, fs: float,
 
 
 # =============================================================================
+# Helpers for integration with main.py
+# =============================================================================
+
+def parse_tcpip_visa(visa_addr: str) -> tuple[str, int]:
+    """Parse a VISA resource string like 'TCPIP0::host::5025::SOCKET'.
+
+    Returns:
+        (host, port)
+    """
+    parts = visa_addr.split("::")
+    if len(parts) >= 4 and parts[0].upper().startswith("TCPIP"):
+        return parts[1], int(parts[2])
+    raise ValueError(f"Cannot parse TCPIP SOCKET visa address: {visa_addr}")
+
+
+def _prepare_data_for_awg(data: np.ndarray) -> np.ndarray:
+    """Normalize and repeat real waveform to meet M8190A_12bit segment rules."""
+    data = np.asarray(data, dtype=float).reshape(-1, 1)
+    scale = np.max(np.abs(data))
+    if scale > 1.0:
+        data = data / scale
+    n = data.shape[0]
+    rpt = int(np.lcm(n, SEGMENT_GRANULARITY) // n)
+    while rpt * n < MIN_SEGMENT_SIZE:
+        rpt += 1
+    return np.tile(data, (rpt, 1))
+
+
+def download_to_awg(data: np.ndarray,
+                    fs: float = DEFAULT_SAMPLE_RATE,
+                    vpp: float = DEFAULT_AMPLITUDE,
+                    host: str = DEFAULT_HOST,
+                    port: int = DEFAULT_PORT,
+                    route: str = "DC",
+                    channel_mapping: np.ndarray | None = None) -> None:
+    """Configure M8190A and download an in-memory real waveform.
+
+    This is the main.py entry point: it performs the same configuration as
+    MATLAB AWG_transmit.m, then downloads the waveform using the raw-socket
+    implementation that the standalone test script verified.
+    """
+    data = _prepare_data_for_awg(data)
+    if channel_mapping is None:
+        channel_mapping = np.array([[1, 0], [0, 1]], dtype=int)
+    awg_transmit(data, fs, vpp, host, port, route=route,
+                 channel_mapping=channel_mapping)
+
+
+# =============================================================================
 # Top-level: AWG_transmit style configuration then download
 # =============================================================================
 
