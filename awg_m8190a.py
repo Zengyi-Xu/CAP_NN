@@ -20,17 +20,23 @@ class M8190AController:
                  visa_addr: Optional[str] = None,
                  sample_rate: float = config.AWG_SAMPLE_RATE,
                  vpp: float = config.AWG_VPP,
+                 output_route: str = config.AWG_OUTPUT_ROUTE,
                  timeout_ms: int = 30000):
         """
         Args:
             visa_addr: VISA 资源字符串，如 "TCPIP0::192.168.1.10::5025::SOCKET"
             sample_rate: AWG 采样率 (Hz)
             vpp: 输出幅度 (V)
+            output_route: 输出路径，可选 "DC" / "AC" / "DAC"
+                - "DC": DC 耦合放大输出（默认，基带/DMT 常用）
+                - "AC": AC 耦合放大输出（隔直，射频/IF 常用）
+                - "DAC": 直接 DAC 输出（未经放大，幅度最小）
             timeout_ms: 通信超时
         """
         self.visa_addr = visa_addr or config.M8190A_VISA_ADDR
         self.sample_rate = sample_rate
         self.vpp = vpp
+        self.output_route = output_route.upper()
         self.rm = pyvisa.ResourceManager()
         self.inst: Optional[pyvisa.Resource] = None
         self.timeout_ms = timeout_ms
@@ -81,10 +87,22 @@ class M8190AController:
     def configure(self,
                   sample_rate: Optional[float] = None,
                   vpp: Optional[float] = None,
-                  channels: Tuple[int, ...] = (1, 2)) -> None:
-        """配置 AWG 基本参数."""
+                  channels: Tuple[int, ...] = (1, 2),
+                  output_route: Optional[str] = None) -> None:
+        """配置 AWG 基本参数.
+
+        Args:
+            sample_rate: 采样率 (Hz)
+            vpp: 输出幅度 (V)
+            channels: 要配置的通道元组
+            output_route: 输出路径，覆盖构造时的设置；可选 "DC" / "AC" / "DAC"
+        """
         sample_rate = sample_rate or self.sample_rate
         vpp = vpp or self.vpp
+        route = (output_route or self.output_route).upper()
+
+        if route not in ("DC", "AC", "DAC"):
+            raise ValueError(f"Unsupported M8190A output route: {route}. Use DC/AC/DAC.")
 
         # 参考时钟
         self.write(":ROSC:FREQ 1e7")
@@ -95,15 +113,18 @@ class M8190AController:
             self.write(f":FREQ:RAST {sample_rate:.15g}")
             # 12 bit 宽带模式
             self.write(f":TRACe{ch}:DWIDth WSP")
-            self.write(f":DC{ch}:FORM NRZ")
-            self.write(f":DC{ch}:VOLT:AMPL {vpp:.15g}")
-            self.write(f":OUTP{ch}:ROUT DC")
+            # 输出路径与对应幅度命令
+            # DC/AC 为放大输出，DAC 为直接 DAC 输出
+            self.write(f":OUTP{ch}:ROUT {route}")
+            self.write(f":{route}{ch}:VOLT:AMPL {vpp:.15g}")
+            if route in ("DC", "AC"):
+                self.write(f":DC{ch}:FORM NRZ")
             self.write(f":OUTP{ch}:NORM ON")
             self.write(f":OUTP{ch}:COMP ON")
             self.write(f":TRAC{ch}:SEL 1")
 
         self.query("*OPC?")
-        print(f"AWG configured: fs={sample_rate/1e9:.2f} GHz, Vpp={vpp} V")
+        print(f"AWG configured: fs={sample_rate/1e9:.2f} GHz, Vpp={vpp} V, route={route}")
 
     def _scale_to_int16(self, data: np.ndarray) -> np.ndarray:
         """把 [-1, 1] 的浮点波形缩放到 M8190A 12-bit DAC (int16, 左移 4bit)."""
@@ -191,10 +212,21 @@ def quick_download_to_awg(data: np.ndarray,
                           sample_rate: float = config.AWG_SAMPLE_RATE,
                           vpp: float = config.AWG_VPP,
                           visa_addr: Optional[str] = None,
+                          output_route: str = config.AWG_OUTPUT_ROUTE,
                           channel: int = 1) -> None:
-    """便捷函数：连接-配置-下载-播放-关闭."""
+    """便捷函数：连接-配置-下载-播放-关闭.
+
+    Args:
+        data: 实数波形
+        sample_rate: 采样率 (Hz)
+        vpp: 输出幅度 (V)
+        visa_addr: VISA 地址
+        output_route: 输出路径 "DC" / "AC" / "DAC"
+        channel: 通道 1 或 2
+    """
     with M8190AController(visa_addr=visa_addr,
                           sample_rate=sample_rate,
-                          vpp=vpp) as awg:
+                          vpp=vpp,
+                          output_route=output_route) as awg:
         awg.configure(channels=(channel,))
         awg.download_waveform(data, channel=channel)

@@ -105,9 +105,15 @@ VIRTUAL_CHANNEL_ATTENUATION = 0.9  # 线性幅度衰减
 M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR"
 M8190A_PORT = 5025
 
+# M8190A 输出路径选择：
+#   "DC"  - DC 耦合放大输出（默认，基带/DMT 常用）
+#   "AC"  - AC 耦合放大输出（隔直，射频/IF 常用）
+#   "DAC" - 直接 DAC 输出（未经放大，幅度最小）
+AWG_OUTPUT_ROUTE = "DC"
+
 # 示波器 USB-B (USBTMC) 资源字符串；留空则自动查找第一个 USB 仪器
-OSC_VISA_ADDR = "USB0::0x2A8D::0x9008::MY50400106::0::INSTR"                 # e.g. "USB0::0x0957::0x17A6::MY12345678::INSTR"
-OSC_CHANNEL = "CHAN2"              # 读取通道
+OSC_VISA_ADDR = "USB1::0x2A8D::0x9008::MY50400106::0::INSTR"                 # e.g. "USB0::0x0957::0x17A6::MY12345678::INSTR"
+OSC_CHANNEL = "CHAN1"              # 读取通道
 OSC_TIMEBASE_SCALE = 60e-6         # 时基 (s/div)
 
 # -----------------------------------------------------------------------------
