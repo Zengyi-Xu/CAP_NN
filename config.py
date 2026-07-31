@@ -101,7 +101,15 @@ VIRTUAL_CHANNEL_ATTENUATION = 0.9  # 线性幅度衰减
 # -----------------------------------------------------------------------------
 # 硬件 VISA 地址
 # -----------------------------------------------------------------------------
-# M8190A: 默认通过 TCPIP socket (端口 5025) 连接；请把 localhost 改成 AWG 实际 IP
+# M8190A VISA 地址（根据实际情况四选一，把 localhost 换成 AWG 实际 IP）：
+#   TCPIP Socket（最常用，无需额外 VISA backend）:
+#     "TCPIP0::192.168.1.10::5025::SOCKET"
+#   HiSLIP:
+#     "TCPIP0::192.168.1.10::hislip0::INSTR"
+#   VXI-11:
+#     "TCPIP0::192.168.1.10::inst0::INSTR"
+#   USB-PXI:
+#     "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR"
 M8190A_VISA_ADDR = "TCPIP0::localhost::5025::SOCKET"
 M8190A_PORT = 5025
 
