@@ -277,7 +277,7 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
                            run_id, "DMT_bitloading_Tx_time")
         plot_spectrum(tx_dict["tx_waveform"],
                       config.AWG_SAMPLE_RATE,
-                      f"Bitloading TX Spectrum ({run_id})",
+                          f"Bitloading TX Spectrum ({run_id})",
                       run_id, "DMT_bitloading_Tx_spec")
 
     if use_awg:

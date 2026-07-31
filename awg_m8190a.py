@@ -153,7 +153,8 @@ class M8190AController:
         segm_len = len(data)
 
         # 删除旧 segment 并定义新 segment
-        self.write(f":ABORt{channel}")
+        # M8190A 的 ABORt / INIT:IMM 需要把通道号作为参数，而不是拼在命令名里
+        self.write(f":ABORt {channel}")
         self.write(f":TRACe{channel}:DELete {segment}")
         self.write(f":TRACe{channel}:DEFine {segment},{segm_len}")
 
@@ -173,12 +174,13 @@ class M8190AController:
         self.query("*OPC?")
 
         # 选择 segment 并打开输出
-        self.write(f":TRAC{channel}:SEL {segment}")
+        self.write(f":TRACe{channel}:SELect {segment}")
         self.write(f":FUNCtion{channel}:MODE ARBitrary")
-        self.write(f":OUTPut{channel} ON")
+        self.write(f":OUTPut{channel}:STATe ON")
 
         if run:
-            self.write(f":INIT:IMM{channel}")
+            # INIT:IMM 的通道号也是参数，不能拼在命令名里
+            self.write(f":INIT:IMM {channel}")
             self.query("*OPC?")
             print(f"Channel {channel} running segment {segment} ({segm_len} samples)")
         else:
@@ -194,13 +196,13 @@ class M8190AController:
         self.download_waveform(iqdata.real, channel=channel_i, segment=segment, run=False)
         self.download_waveform(iqdata.imag, channel=channel_q, segment=segment, run=False)
         if run:
-            self.write(f":INIT:IMM{channel_i}")
-            self.write(f":INIT:IMM{channel_q}")
+            self.write(f":INIT:IMM {channel_i}")
+            self.write(f":INIT:IMM {channel_q}")
             self.query("*OPC?")
 
     def stop(self, channels: Tuple[int, ...] = (1, 2)) -> None:
         for ch in channels:
-            self.write(f":ABORt{ch}")
+            self.write(f":ABORt {ch}")
 
     def send_preset(self) -> None:
         """发送 *RST 并等待完成."""
