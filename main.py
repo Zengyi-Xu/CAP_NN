@@ -36,7 +36,7 @@ from dmt_core import (
     load_snr_table,
     assign_qam_order_from_snr,
 )
-from awg_download import download_to_awg, parse_tcpip_visa
+from awg_download import download_to_awg, parse_tcpip_visa,_parse_args,awg_transmit,_read_port_from_config,read_file
 from oscilloscope import KeysightScopeUSB
 from nn_equalizer import run_nn_equalizer
 from virtual_channel import VirtualChannel
@@ -163,9 +163,25 @@ def step2_receive_qpsk(tx_dict: dict,
                        run_id: str = None):
     """STEP2: 接收 QPSK 波形并估计每载波 SNR."""
     print("\n========== STEP2: Receive QPSK & Estimate SNR ==========")
+    
     # 同步/参考优先使用预均衡波形（与 AWG 实际播放的信号一致）
     tx_waveform = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
+    args = _parse_args()
+    port = args.port if args.port is not None else _read_port_from_config(args.config_txt)
 
+    # Read waveform (same as MATLAB readFile)
+    iqdata, fs, marker, rpt, ch_map = read_file(args.waveform, args.sample_rate)
+
+    # Repeat to meet segment constraints (same as MATLAB AWGM8190A_Auto)
+    iqdata = np.tile(iqdata, (rpt, 1))
+    marker = np.tile(marker, rpt)
+
+    print(f"[MAIN] host={args.host}, port={port}, fs={fs/1e9:.3f} GHz, "
+          f"Vpp={args.amplitude}, route={args.route}, waveform_len={iqdata.shape[0]}")
+
+    # Run the same flow as MATLAB AWG_transmit + download
+    awg_transmit(iqdata, fs, args.amplitude, args.host, port,
+                 route=args.route, channel_mapping=ch_map)
     rx_source = "unknown"
     if use_virtual_channel and offline:
         ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
@@ -256,7 +272,7 @@ def step2_receive_qpsk(tx_dict: dict,
 
 def step3_generate_bitloading_tx(snrs: np.ndarray,
                                  constellation: str = config.CONSTELLATION_QAM,
-                                 use_awg: bool = False,
+                                 use_awg: bool = True,
                                  plot_dir: Path = None,
                                  run_id: str = None):
     """STEP3: 根据 SNR 做 bitloading 并生成发射波形."""
@@ -315,16 +331,18 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
                           f"Bitloading TX Spectrum ({run_id})",
                       run_id, "DMT_bitloading_Tx_spec")
 
-    if use_awg:
-        host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
-        download_to_awg(tx_out,
-                        fs=config.AWG_SAMPLE_RATE,
-                        vpp=config.AWG_VPP,
-                        host=host,
-                        port=port,
-                        route=config.AWG_OUTPUT_ROUTE)
+
+    host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
+    download_to_awg(tx_out,
+                    fs=config.AWG_SAMPLE_RATE,
+                    vpp=config.AWG_VPP,
+                    host=host,
+                    port=port,
+                    route=config.AWG_OUTPUT_ROUTE)
 
     return tx_dict
+
+
 
 
 def step4_receive_bitloading(tx_dict: dict,
@@ -336,8 +354,22 @@ def step4_receive_bitloading(tx_dict: dict,
                              run_id: str = None):
     """STEP4: 接收 bitloading 波形并解调/计算 BER/SER."""
     print("\n========== STEP4: Receive Bitloading & Demodulate ==========")
-    # 同步/参考优先使用预均衡波形（与 AWG 实际播放的信号一致）
+    
+    # ✅ 使用 Step 3 生成的 bitloading 波形作为参考
     tx_waveform = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
+
+    # ❌ 删除：Step 3 已经下载了 bitloading 波形到 AWG，这里不需要重新下载
+    # 如果确实需要重新下载（比如 AWG 被重置了），用下面这段替代：
+    """
+    if not offline:
+        host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
+        download_to_awg(tx_waveform,
+                        fs=config.AWG_SAMPLE_RATE,
+                        vpp=config.AWG_VPP,
+                        host=host,
+                        port=port,
+                        route=config.AWG_OUTPUT_ROUTE)
+    """
 
     rx_source = "unknown"
     if use_virtual_channel and offline:
@@ -457,8 +489,6 @@ def step4_receive_bitloading(tx_dict: dict,
                                     name="constellation_by_order")
 
     return res
-
-
 def run_full_pipeline(offline: bool = False,
                       use_awg: bool = False,
                       use_nn: bool = False,

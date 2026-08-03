@@ -86,7 +86,7 @@ HW_PRE_R0 = 50                     # 参考阻抗 (Ohm)
 # -----------------------------------------------------------------------------
 AWG_SAMPLE_RATE = 8e9              # AWG 采样率 (Hz)
 OSC_SAMPLE_RATE = 10e9             # 示波器采样率 (Hz)
-AWG_VPP = 0.5                      # AWG 输出幅度 (Vpp)
+AWG_VPP = 0.8                      # AWG 输出幅度 (Vpp)
 
 # -----------------------------------------------------------------------------
 # 虚拟信道（用于无仪器时的调试/维护）
@@ -111,8 +111,9 @@ VIRTUAL_CHANNEL_ATTENUATION = 0.9  # 线性幅度衰减
 #   USB-PXI:
 #     "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR"
 M8190A_VISA_ADDR = "TCPIP0::localhost::5025::SOCKET"
+# M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR "
 M8190A_PORT = 5025
-
+    
 # M8190A 输出路径选择：
 #   "DC"  - DC 耦合放大输出（默认，基带/DMT 常用）
 #   "AC"  - AC 耦合放大输出（隔直，射频/IF 常用）
@@ -123,8 +124,8 @@ AWG_OUTPUT_ROUTE = "DC"
 #   TCPIP Socket:  "TCPIP0::192.168.1.10::5025::SOCKET"
 #   USB-B/USBTMC:  "USB0::0x0957::0x17A6::MY12345678::INSTR"
 # 留空则自动查找第一个 USB 仪器
-OSC_VISA_ADDR = "TCPIP0::localhost::5025::SOCKET"
-OSC_CHANNEL = "CHAN2"              # MATLAB oscrunQPSK.m / oscrunDMT.m 均使用 CHAN2
+OSC_VISA_ADDR = "USB0::0x2A8D::0x9008::MY50400106::0::INSTR"
+OSC_CHANNEL = "CHAN1"              # MATLAB oscrunQPSK.m / oscrunDMT.m 均使用 CHAN2
 OSC_TIMEBASE_SCALE = 80e-6         # QPSK 探测时基 (s/div)，DMT bitloading 用 60e-6
 
 # -----------------------------------------------------------------------------

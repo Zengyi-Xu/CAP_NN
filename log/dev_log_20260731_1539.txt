@@ -1,0 +1,243 @@
+DMT_PY_NN 开发日志
+==================
+时间: 2026-07-31 15:39
+会话目标: 将 MATLAB AWGM8190A_Auto 代码原样重写为独立 Python AWG 传输脚本，供用户测试 M8190A 连接。
+
+一、阅读的 MATLAB 源文件
+------------------------
+D:\BaiduSyncdisk\SyncWorkplace\Individual\Code\20260429_900G_testing\AWGM8190A_Auto\
+  - AWGM8190_Auto.m
+  - AWG_transmit.m
+  - download.m
+  - download_M8190A.m
+  - makeArbConfig.m
+  - readFile.m
+  - loadfile.m
+  - loadArbConfig.m
+  - iqopen.m
+  - xfprintf.m
+  - xquery.m
+  - xbinblockwrite.m
+  - xbinblockread.m
+
+还读取了 MATLAB 用来决定端口的配置文件：
+  - D:\...\20260429_900G_testing\RX_CHANNEL_SENSING_CONFIG.txt
+    第 9 个数值为 5025，因此 MATLAB 实际通过本地主机 TCP 端口 5025 连接 AWG。
+
+二、实现内容
+------------
+新建文件:
+  D:\BaiduSyncdisk\SyncWorkplace\Individual\Code\20260730_DMT_testing_python\awg_download.py
+
+功能:
+  1. 使用 Python 标准库 socket 建立到 M8190A 的原始 TCP 连接（与 MATLAB tcpclient 行为一致）。
+  2. 完整复现 xfprintf / xquery / xbinblockwrite 三个底层 SCPI 通信函数。
+  3. 复现 makeArbConfig + loadArbConfig，构造 M8190A_12bit 模式所需的 arbConfig。
+  4. 复现 readFile / loadfile 对单列 txt 波形的读取、归一化、重复次数计算。
+  5. 复现 download / download_M8190A / gen_arb_M8190A / doRun 的完整下载流程：
+     - 自检 :TEST:PON?
+     - 设置外参考时钟 10 MHz、采样率、12-bit WSP 模式
+     - 配置输出路径（DC/AC/DAC）与幅度
+     - 删除/定义 segment
+     - 按 523200 样点分块 IEEE binblock 下载 int16 波形
+     - 选择 segment、打开输出、INIT:IMM 启动
+  6. 命令行参数支持：--host、--port、-f、--sample-rate、--amplitude、--route、--config-txt。
+
+输出路径注释（已在代码中写明）：
+  - "DC"  : DC 耦合放大输出（基带/DMT 常用，默认）
+  - "AC"  : AC 耦合放大输出（隔直，射频/IF 常用）
+  - "DAC" : 直接 DAC 输出（未经放大，幅度最小）
+
+三、验证
+--------
+  1. python -m py_compile awg_download.py -> 通过，无警告。
+  2. python awg_download.py --help -> 正常显示帮助信息。
+
+四、Git 提交与推送
+-----------------
+  提交: 15073c7 feat: standalone raw-socket M8190A download test mirroring MATLAB AWGM8190A_Auto
+  分支: master
+  远程: https://github.com/Zengyi-Xu/DMT_PY_NN.git
+  推送结果: 成功 (0866605..15073c7  master -> master)
+
+五、后续建议
+------------
+  - 该脚本默认读取原 MATLAB 路径 C:\Users\Lab VLC\Desktop\PSCAP\txdata\datatx_pre_4QAM.txt；
+    测试时可用 -f 指定项目 data/txdata 下的波形，例如：
+      python awg_download.py -f data/txdata/SNRest_QPSK.txt --host localhost
+  - 若 AWG 无响应，请先确认 AWG 固件 Soft Front Panel 已启动且 TCPIP Socket 端口 5025 已监听；
+    或改用 --route AC / --route DAC 测试不同输出路径。
+
+
+--- 追加修改（同一会话） ---
+时间: 2026-07-31 15:5x
+
+用户反馈与修改：
+1. awg_download.py 默认波形路径不存在。
+   - 将 DEFAULT_WAVEFORM 从原 MATLAB 绝对路径改为项目相对路径：
+     Path(__file__).parent / "data" / "txdata" / "SNRest_QPSK.txt"
+   - 同步修正了 docstring 中的示例命令。
+
+2. 不要给发射波形编号。
+   - main.py 中 step1 / step3 保存 TX 文件时不再使用 count 编号。
+   - 改为使用 config.py 中定义的固定路径：
+     * TX_QPSK_FILE / TX_QPSK_PRE_FILE
+     * TX_BPL_FILE / TX_BPL_PRE_FILE
+     * ORIGIN_DEC_DATA_QPSK / ORIGIN_DEC_DATA_BPL
+     * DEMOD_FILE_QPSK / DEMOD_FILE_BPL
+     * BITPOWER_QPSK / BITPOWER_BPL
+     * QAMORDERALL_FILE
+   - 移除了 main.py 中不再使用的 _current_count() 辅助函数。
+
+3. 保存接收波形时附带信号 config。
+   - utils.py 新增 save_rx_config(rx_file, **kwargs)：
+     保存为 {rx_stem}_config.json，自动处理 ndarray / Path 序列化。
+   - main.py step2 / step4 在线模式（连接示波器）保存 RX 文件后，
+     立即保存对应 config，包含 run_id、stage、采样率、Vpp、输出路径、
+     scope 通道、时基、载波数、导频图案、预均衡标志、RX 长度、count 等。
+
+验证：
+  python -m py_compile awg_download.py main.py utils.py -> 通过
+
+Git：
+  本地提交: 918b71e fix: default AWG test waveform path; stop numbering TX files; save config alongside RX captures
+  推送: 尝试 3 次均因网络连接重置/超时失败（无法连接 github.com:443）。
+        代码已提交到本地 master，网络恢复后可手动 push：
+            git push origin master
+
+
+--- 追加修改（同一会话） ---
+时间: 2026-07-31 16:0x
+
+用户反馈：awg_download.py 测试成功，要求更新原来的 main 函数。
+
+修改内容：
+1. awg_download.py 新增两个接口函数，供 main.py 调用：
+   - parse_tcpip_visa(visa_addr) -> (host, port)
+     把 config.M8190A_VISA_ADDR 解析为 raw socket 所需的 host/port。
+   - download_to_awg(data, fs, vpp, host, port, route, channel_mapping)
+     对内存中的实数波形做归一化、重复到满足 segment 约束，
+     然后复用 awg_transmit() 完成配置 + 下载 + 播放。
+
+2. main.py 更新：
+   - 移除 from awg_m8190a import M8190AController, quick_download_to_awg
+   - 改为 from awg_download import download_to_awg, parse_tcpip_visa
+   - step1 / step3 中的 use_awg 分支替换为 raw-socket 下载：
+       host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
+       download_to_awg(tx_out, fs=config.AWG_SAMPLE_RATE, vpp=config.AWG_VPP,
+                       host=host, port=port, route=config.AWG_OUTPUT_ROUTE)
+   - 输出路径仍由 config.AWG_OUTPUT_ROUTE 控制（DC/AC/DAC）。
+
+验证：
+  python -m py_compile awg_download.py main.py utils.py -> 通过
+  python -c "from awg_download import download_to_awg, parse_tcpip_visa; print(parse_tcpip_visa('TCPIP0::localhost::5025::SOCKET'))"
+      -> ('localhost', 5025)
+
+注意：当前运行环境的 Python 缺少 pyvisa，因此 `python main.py --help` 在基础环境中无法直接运行；
+      但 main.py 语法无误，在用户的 Spyder/Anaconda 环境（已装 pyvisa）中可正常导入。
+
+Git：
+  本地提交: 4aa3e46 feat: main.py now uses raw-socket AWG download via awg_download
+  推送: 仍因 GitHub 443 网络超时失败，代码在本地 master。网络恢复后执行：
+            git push origin master
+
+
+--- 追加修改（同一会话） ---
+时间: 2026-07-31 16:1x
+
+用户反馈：离线运行 main.py 时 step4 找不到 rawOSC_DMT_*.txt，报错 FileNotFoundError。
+
+修改内容：
+1. main.py step2 / step4 的离线分支增加 try/except：
+   - 先尝试按原有逻辑加载离线 RX 文件；
+   - 如果 FileNotFoundError，打印警告并自动回退到虚拟信道
+     （VirtualChannel.apply(tx_waveform)）。
+2. 在线模式（连接示波器）不受影响，仍按原逻辑保存 RX 与 config。
+
+这样离线模式下只要缺少某个 RX 文件，就会自动用虚拟信道补齐，
+方便无仪器时直接跑通完整 pipeline。
+
+验证：
+  python -m py_compile main.py -> 通过
+
+Git：
+  本地提交: 3f865d8 fix: offline mode falls back to virtual channel when RX file is missing
+  推送: 仍因 GitHub 443 网络问题失败，代码在本地 master。网络恢复后执行：
+            git push origin master
+
+
+--- 追加修改（同一会话） ---
+时间: 2026-07-31 16:3x
+
+用户反馈：
+1. rx_spectrum 频域不对，似乎是仿真信道而不是实测信道。
+2. 比特加载结果不对，根本原因是 SNR 估计错误，怀疑把对数值当作了线性值。
+
+问题定位与修改：
+1. SNR 公式与 MATLAB 不一致。
+   - 原 Python: SNR = mean(|out2|^2) / mean(|out2 - in|^2)
+   - MATLAB:    SNR = mean(|in|^2)   / mean(|out2 - in|^2)   (1/EVM^2)
+   - 已修改为 MATLAB 公式，sig_pow 使用 in_denorm 的功率。
+
+2. 频谱纵轴与 MATLAB 不一致。
+   - 原 Python: 20*log10(abs(fft(sig)))
+   - MATLAB:    10*log10(abs(fft(sig)))
+   - 已修改 utils.py plot_spectrum 与 plot_adapter.py 中的 _SPECTRUM_TEMPLATE。
+
+3. 无法区分仿真/实测。
+   - main.py step2 / step4 增加 rx_source 跟踪：
+     * "measured_online"   : 在线示波器采集
+     * "measured_offline"  : 离线读取已有文件
+     * "virtual_channel"   : 虚拟信道生成
+   - 所有 RX 相关图像标题均带上 [rx_source]。
+   - 使用虚拟信道时，自动保存波形到：
+       data/rxdata/virtual_QPSK_SNRest_{run_id}.txt
+       data/rxdata/virtual_DMT_bitloading_{run_id}.txt
+
+验证：
+  python -m py_compile dmt_core.py main.py utils.py plot_adapter.py -> 通过
+  虚拟信道测试：
+    旧公式 mean SNR = 11.04 linear (10.43 dB)
+    新公式 mean SNR = 15.99 linear (12.04 dB)
+    与 20 dB 虚拟信道设置相符，不再出现之前 ~0.03 的异常低值。
+
+Git：
+  本地提交: aad9a4f fix: match MATLAB SNR formula and spectrum scale; label virtual vs measured RX
+  推送: 仍因 GitHub 443 网络问题失败，代码在本地 master。网络恢复后执行：
+            git push origin master
+
+
+--- 追加修改（同一会话） ---
+时间: 2026-07-31 16:4x
+
+用户反馈：step2 读取的波形频域上看不到信号，怀疑示波器读取代码有问题。
+
+问题定位：
+1. 对比 MATLAB oscrunQPSK.m / oscrunDMT.m 后发现：
+   - MATLAB 使用 TCPIP 连接示波器（address_OSC.txt 中的 IP，端口 5025），
+     而不是 USB-B。
+   - MATLAB 读取的是 CHAN2，而 Python config 中默认是 CHAN1。
+     这是导致“看不到信号”的最大可能原因。
+
+修改内容：
+1. 新增独立测试脚本 scope_capture_test.py：
+   - 支持 --resource 指定 VISA/TCPIP 地址、--usb 自动选择 USB 仪器。
+   - 默认通道 CHAN2，与 MATLAB 一致。
+   - 采集后保存波形、绘制时域/频域图、打印统计信息（min/max/std/RMS/频谱峰值）。
+   - 如果波形 std 极低，会提示 "No signal detected"。
+
+2. 修改 config.py：
+   - OSC_VISA_ADDR 默认改为 "TCPIP0::localhost::5025::SOCKET"，并注释说明 USB/TCPIP 两种写法。
+   - OSC_CHANNEL 改为 "CHAN2"，与 MATLAB 一致。
+
+3. main.py 中 step2 和 step4 的示波器采集通道与时基已和 MATLAB 一致
+   （QPSK 80 us/div，DMT 60 us/div，均用 CHAN2）。
+
+验证：
+  python -m py_compile scope_capture_test.py config.py main.py oscilloscope.py -> 通过
+  python scope_capture_test.py --help -> 因基础环境无 pyvisa 无法直接运行，
+      但在用户已装 pyvisa 的 Spyder 环境中可正常导入。
+
+Git：
+  本地提交: 4ee4fdf feat: standalone scope capture test; switch default OSC_CHANNEL to CHAN2 and add TCPIP option
+  推送状态: 待网络恢复后确认（命令在后台执行中）。

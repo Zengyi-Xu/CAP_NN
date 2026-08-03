@@ -165,7 +165,6 @@ ax.set_xlabel("TX Amplitude")
 ax.set_ylabel("RX Amplitude")
 ax.legend()
 ax.grid(True, alpha=0.3)
-ax.axis("equal")
 fig.tight_layout()
 """)
 

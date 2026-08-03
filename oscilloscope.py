@@ -34,30 +34,82 @@ class KeysightScopeUSB:
 
     def list_resources(self) -> Tuple[str, ...]:
         return self.rm.list_resources()
-
+    
     def connect(self) -> "KeysightScopeUSB":
-        """连接示波器."""
-        if self.resource is None or self.resource == "":
-            usb_resources = [r for r in self.list_resources() if r.startswith("USB")]
-            if not usb_resources:
-                raise RuntimeError(
-                    "No USB instrument found. Available resources:\n" +
-                    "\n".join(self.list_resources())
-                )
+        """连接示波器，支持自动匹配变化的 USB 端口号."""
+        
+        # 先列出所有可用资源
+        all_resources = self.list_resources()
+        usb_resources = [r for r in all_resources if r.startswith("USB")]
+        
+        if not usb_resources:
+            raise RuntimeError(
+                "No USB instrument found. Available resources:\n" + "\n".join(all_resources)
+            )
+        
+        target = self.resource
+        
+        # 如果没指定地址，自动选第一个 USB 设备
+        if target is None or target == "":
             self._used_resource = usb_resources[0]
             print(f"Auto-selected scope resource: {self._used_resource}")
         else:
-            self._used_resource = self.resource
-
+            # 尝试用配置的地址打开
+            self._used_resource = target
+            
+            # 如果配置地址打不开，尝试按 VID/PID/SN 匹配（忽略 USBx 编号）
+            if target not in all_resources:
+                # 解析目标地址的 VID, PID, SN
+                # 格式: USBx::0xVVVV::0xPPPP::SSSSSSSS::0::INSTR
+                try:
+                    parts = target.split("::")
+                    target_vid = parts[1].lower()   # 0x2a8d
+                    target_pid = parts[2].lower()   # 0x9008
+                    target_sn = parts[3]            # MY50400106
+                    
+                    for r in usb_resources:
+                        r_parts = r.split("::")
+                        if (r_parts[1].lower() == target_vid and
+                            r_parts[2].lower() == target_pid and
+                            r_parts[3] == target_sn):
+                            self._used_resource = r
+                            print(f"Address {target} not found, matched to {r}")
+                            break
+                except Exception:
+                    pass
+        
         print(f"Connecting to oscilloscope at {self._used_resource} ...")
         self.inst = self.rm.open_resource(self._used_resource)
         self.inst.timeout = self.timeout_ms
         self.inst.write_termination = "\n"
         self.inst.read_termination = "\n"
-
+    
         idn = self.query("*IDN?")
         print(f"  *IDN = {idn}")
         return self
+    # def connect(self) -> "KeysightScopeUSB":
+    #     """连接示波器."""
+    #     if self.resource is None or self.resource == "":
+    #         usb_resources = [r for r in self.list_resources() if r.startswith("USB")]
+    #         if not usb_resources:
+    #             raise RuntimeError(
+    #                 "No USB instrument found. Available resources:\n" +
+    #                 "\n".join(self.list_resources())
+    #             )
+    #         self._used_resource = usb_resources[0]
+    #         print(f"Auto-selected scope resource: {self._used_resource}")
+    #     else:
+    #         self._used_resource = self.resource
+
+    #     print(f"Connecting to oscilloscope at {self._used_resource} ...")
+    #     self.inst = self.rm.open_resource(self._used_resource)
+    #     self.inst.timeout = self.timeout_ms
+    #     self.inst.write_termination = "\n"
+    #     self.inst.read_termination = "\n"
+
+    #     idn = self.query("*IDN?")
+    #     print(f"  *IDN = {idn}")
+    #     return self
 
     def close(self) -> None:
         if self.inst is not None:
@@ -102,7 +154,7 @@ class KeysightScopeUSB:
         except Exception:
             pass
 
-        self.write(":STOP")
+       # self.write(":STOP")
         self.write(f":ACQUIRE:SRATE {sample_rate:.15g}")
         self.write(f":TIMEBASE:SCALE {timebase_scale:.15g}")
         # 固定采集点数，确保能覆盖完整 DMT 波形（4M 点 @ 10 GSa/s = 400 us）
@@ -140,6 +192,8 @@ class KeysightScopeUSB:
             ydata: 电压值数组 (V)
             preamble: 解析后的 preamble 字典
         """
+        # ✅ 新增：重新运行示波器，等待一次完整采集完成
+        self.write(":RUN")
         channel = channel or config.OSC_CHANNEL
         self.write(f":WAVEFORM:SOURCE {channel}")
 
