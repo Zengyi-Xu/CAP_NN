@@ -23,8 +23,8 @@ for _d in (DATA_DIR, TXDATA_DIR, RXDATA_DIR, NN_DIR, PLOT_DIR, RECORD_DIR):
 # -----------------------------------------------------------------------------
 # DMT 信号参数
 # -----------------------------------------------------------------------------
-CARRIERNO = 1024 + 16 * 2          # 子载波总数 (1056)
-ZEROPAD1 = 2 * 8                   # 每侧零填充数 (16)
+CARRIERNO = 1056    # 子载波总数 (1056)
+ZEROPAD1 = 16    # 每侧零填充数 (16)
 UPSAMPLENO = 2                     # 上采样倍数
 DATANO_QPSK = 100                  # QPSK 信道探测时符号数
 DATANO_BPL = 200                   # bitloading 传输时符号数
@@ -75,7 +75,7 @@ PRE_EQUAL_DB2 = 20                 # 第二门限 (仅 method=4 诊断用)
 
 # Hardware Pre (method=5) 桥T均衡器参数, 与 Pre.m case 5 一致
 HW_PRE_FBEGIN = 1                  # 起始频点索引 (MHz)
-HW_PRE_ADB = 5                    # 最大衰减 (dB)
+HW_PRE_ADB = 5                     # 最大衰减 (dB)
 HW_PRE_FCEN_MHZ = 600              # 中心频率 (MHz), <1000
 HW_PRE_FHALF_MHZ = 400             # 半衰减带宽 (MHz), <1000
 HW_PRE_FEND = 600                  # 结束频点 (MHz, 相对 FBEGIN)
@@ -89,9 +89,14 @@ OSC_SAMPLE_RATE = 10e9             # 示波器采样率 (Hz)
 AWG_VPP = 0.8                      # AWG 输出幅度 (Vpp)
 
 # -----------------------------------------------------------------------------
+# 运行模式
+# -----------------------------------------------------------------------------
+OFFLINE_FLAG = 1                   # 1=离线处理已有 scope 文件, 0=在线连接示波器
+
+# -----------------------------------------------------------------------------
 # 虚拟信道（用于无仪器时的调试/维护）
 # -----------------------------------------------------------------------------
-USE_VIRTUAL_CHANNEL =   0          # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
+USE_VIRTUAL_CHANNEL = 1          # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
 VIRTUAL_CHANNEL_FC = 0.8e9         # 一阶低通截止频率 (Hz)，模拟发射端高频衰减
 VIRTUAL_CHANNEL_SNR_DB = 20        # 接收机信噪比 (dB)，数值越高噪声越小
 VIRTUAL_CHANNEL_NONLINEARITY = 0.02  # 接收机三阶非线性系数
@@ -111,7 +116,8 @@ VIRTUAL_CHANNEL_ATTENUATION = 0.9  # 线性幅度衰减
 #   USB-PXI:
 #     "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR"
 M8190A_VISA_ADDR = "TCPIP0::localhost::5025::SOCKET"
-# M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR "
+#M8190A_VISA_ADDR = "TCPIP0::localhost::60005::SOCKET"
+#M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR "
 M8190A_PORT = 5025
     
 # M8190A 输出路径选择：
@@ -124,7 +130,9 @@ AWG_OUTPUT_ROUTE = "DC"
 #   TCPIP Socket:  "TCPIP0::192.168.1.10::5025::SOCKET"
 #   USB-B/USBTMC:  "USB0::0x0957::0x17A6::MY12345678::INSTR"
 # 留空则自动查找第一个 USB 仪器
-OSC_VISA_ADDR = "USB0::0x2A8D::0x9008::MY50400106::0::INSTR"
+# SC_VISA_ADDR = "USB1::0x2A8D::0x9008::MY50400106::0::INSTR"
+# 改为（网口，VXI-11 协议）
+OSC_VISA_ADDR = "TCPIP0::192.168.1.83::5025::SOCKET"
 OSC_CHANNEL = "CHAN1"              # MATLAB oscrunQPSK.m / oscrunDMT.m 均使用 CHAN2
 OSC_TIMEBASE_SCALE = 80e-6         # QPSK 探测时基 (s/div)，DMT bitloading 用 60e-6
 
@@ -190,10 +198,6 @@ PLOT_DPI = 300                     # 默认图像分辨率（Spyder 显示与保
 POSTEQ_FLAG = 0                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
 USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
 
-# -----------------------------------------------------------------------------
-# 运行模式
-# -----------------------------------------------------------------------------
-OFFLINE_FLAG = 1                   # 1=离线处理已有 scope 文件, 0=在线连接示波器
 
 # -----------------------------------------------------------------------------
 # 随机种子 (保证可重复)

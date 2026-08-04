@@ -36,44 +36,39 @@ class KeysightScopeUSB:
         return self.rm.list_resources()
     
     def connect(self) -> "KeysightScopeUSB":
-        """连接示波器，支持自动匹配变化的 USB 端口号."""
+        """连接示波器，支持 USB 和 TCPIP."""
         
-        # 先列出所有可用资源
         all_resources = self.list_resources()
-        usb_resources = [r for r in all_resources if r.startswith("USB")]
         
-        if not usb_resources:
-            raise RuntimeError(
-                "No USB instrument found. Available resources:\n" + "\n".join(all_resources)
-            )
-        
-        target = self.resource
-        
-        # 如果没指定地址，自动选第一个 USB 设备
-        if target is None or target == "":
+        if self.resource is None or self.resource == "":
+            # 未指定地址：优先找 USB，没有则报错
+            usb_resources = [r for r in all_resources if r.startswith("USB")]
+            if not usb_resources:
+                raise RuntimeError(
+                    "No USB instrument found. Available resources:\n" + "\n".join(all_resources)
+                )
             self._used_resource = usb_resources[0]
             print(f"Auto-selected scope resource: {self._used_resource}")
         else:
-            # 尝试用配置的地址打开
-            self._used_resource = target
+            self._used_resource = self.resource
             
-            # 如果配置地址打不开，尝试按 VID/PID/SN 匹配（忽略 USBx 编号）
-            if target not in all_resources:
-                # 解析目标地址的 VID, PID, SN
-                # 格式: USBx::0xVVVV::0xPPPP::SSSSSSSS::0::INSTR
+            # 如果配置地址不在列表中，尝试按 VID/PID/SN 匹配（仅 USB）
+            if self._used_resource not in all_resources and self._used_resource.startswith("USB"):
                 try:
-                    parts = target.split("::")
-                    target_vid = parts[1].lower()   # 0x2a8d
-                    target_pid = parts[2].lower()   # 0x9008
-                    target_sn = parts[3]            # MY50400106
+                    parts = self._used_resource.split("::")
+                    target_vid = parts[1].lower()
+                    target_pid = parts[2].lower()
+                    target_sn = parts[3]
                     
-                    for r in usb_resources:
+                    for r in all_resources:
+                        if not r.startswith("USB"):
+                            continue
                         r_parts = r.split("::")
                         if (r_parts[1].lower() == target_vid and
                             r_parts[2].lower() == target_pid and
                             r_parts[3] == target_sn):
                             self._used_resource = r
-                            print(f"Address {target} not found, matched to {r}")
+                            print(f"Address {self.resource} not found, matched to {r}")
                             break
                 except Exception:
                     pass

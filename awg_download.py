@@ -557,7 +557,7 @@ def download_to_awg(data: np.ndarray,
     """
     data = _prepare_data_for_awg(data)
     if channel_mapping is None:
-        channel_mapping = np.array([[1, 0], [0, 1]], dtype=int)
+        channel_mapping = np.array([[1, 0], [1, 0]], dtype=int)
     awg_transmit(data, fs, vpp, host, port, route=route,
                  channel_mapping=channel_mapping)
 
@@ -628,7 +628,10 @@ def _parse_args():
     p.add_argument("--config-txt", default=DEFAULT_CONFIG_TXT,
                    help="RX_CHANNEL_SENSING_CONFIG.txt used by MATLAB to read port")
     p.add_argument("--no-run", action="store_true", help="Download only, do not start output")
-    return p.parse_args()
+    # 用 parse_known_args：当被 main.py 导入调用时，sys.argv 里是 main.py 自己的
+    # 参数（--offline 等），这里忽略未知参数、只取默认值，避免 argparse 报错退出。
+    args, _unknown = p.parse_known_args()
+    return args
 
 
 def _read_port_from_config(path: str | Path) -> int:

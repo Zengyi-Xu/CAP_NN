@@ -1,0 +1,18 @@
+{
+  "run_id": "20260804_113157_f53605",
+  "stage": "QPSK_SNR_est",
+  "awg_sample_rate": 8000000000.0,
+  "osc_sample_rate": 10000000000.0,
+  "awg_vpp": 0.8,
+  "awg_output_route": "DC",
+  "scope_channel": "CHAN1",
+  "timebase_scale": 8e-05,
+  "carrierno": 1056,
+  "zeropad1": 16,
+  "datano_qpsk": 100,
+  "trainingno": 20,
+  "pilot_pattern": "training_only",
+  "pre_equ_flag": 3,
+  "rx_length": 3200000,
+  "count": 60
+}

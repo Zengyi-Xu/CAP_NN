@@ -143,7 +143,8 @@ def step1_generate_qpsk_tx(use_awg: bool = False,
                            f"QPSK TX Constellation ({run_id})",
                            run_id, "SNRest_QPSK_constellation")
 
-    if use_awg:
+    
+    if config.OFFLINE_FLAG == 0:
         host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
         download_to_awg(tx_out,
                         fs=config.AWG_SAMPLE_RATE,
@@ -166,22 +167,6 @@ def step2_receive_qpsk(tx_dict: dict,
     
     # 同步/参考优先使用预均衡波形（与 AWG 实际播放的信号一致）
     tx_waveform = tx_dict["tx_waveform_pre"] if tx_dict.get("tx_waveform_pre") is not None else tx_dict["tx_waveform"]
-    args = _parse_args()
-    port = args.port if args.port is not None else _read_port_from_config(args.config_txt)
-
-    # Read waveform (same as MATLAB readFile)
-    iqdata, fs, marker, rpt, ch_map = read_file(args.waveform, args.sample_rate)
-
-    # Repeat to meet segment constraints (same as MATLAB AWGM8190A_Auto)
-    iqdata = np.tile(iqdata, (rpt, 1))
-    marker = np.tile(marker, rpt)
-
-    print(f"[MAIN] host={args.host}, port={port}, fs={fs/1e9:.3f} GHz, "
-          f"Vpp={args.amplitude}, route={args.route}, waveform_len={iqdata.shape[0]}")
-
-    # Run the same flow as MATLAB AWG_transmit + download
-    awg_transmit(iqdata, fs, args.amplitude, args.host, port,
-                 route=args.route, channel_mapping=ch_map)
     rx_source = "unknown"
     if use_virtual_channel and offline:
         ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
@@ -317,7 +302,7 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
                                snrs_db,
                                tx_dict["RQ"],
                                tx_dict["S"],
-                               ratio=tx_dict.get("ratio", 100),
+                               ratio=tx_dict.get("ratio", 300),
                                rate_gbps=tx_dict.get("datarate_gbps", 0.0),
                                title=f"Bit-Power Loading ({run_id})",
                                run_id=run_id,
@@ -331,14 +316,14 @@ def step3_generate_bitloading_tx(snrs: np.ndarray,
                           f"Bitloading TX Spectrum ({run_id})",
                       run_id, "DMT_bitloading_Tx_spec")
 
-
-    host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
-    download_to_awg(tx_out,
-                    fs=config.AWG_SAMPLE_RATE,
-                    vpp=config.AWG_VPP,
-                    host=host,
-                    port=port,
-                    route=config.AWG_OUTPUT_ROUTE)
+    if config.OFFLINE_FLAG == 0:
+        host, port = parse_tcpip_visa(config.M8190A_VISA_ADDR)
+        download_to_awg(tx_out,
+                        fs=config.AWG_SAMPLE_RATE,
+                        vpp=config.AWG_VPP,
+                        host=host,
+                        port=port,
+                        route=config.AWG_OUTPUT_ROUTE)
 
     return tx_dict
 

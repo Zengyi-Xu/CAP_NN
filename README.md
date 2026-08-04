@@ -204,6 +204,25 @@ export MPLBACKEND=Agg # Git Bash
 PLOT_SHOW = False
 ```
 
+## 实验数据可视化 GUI
+
+`dmt_gui.py` 提供一个桌面 GUI，用于浏览每次实验保存的数据并直接运行测试（无需额外依赖，tkinter + matplotlib，已适配高 DPI 屏幕）：
+
+```bash
+.venv\Scripts\python dmt_gui.py
+```
+
+包含四个子页面：
+
+| 子页面 | 内容 |
+|--------|------|
+| 波形时频域 | QPSK 探测与 DMT Bitloading 的 TX/RX 时域波形、频谱 |
+| DMT 符号调制 | Bit/Power Loading、QPSK 星座图、按调制阶数分类的 RX 星座图与密度热力图 |
+| 传输实验结果 | 历次实验记录表（速率/BER/SER/SNR）、SNR 对比、每子载波 SER/BER、TX-RX 非线性、历次实验趋势 |
+| 运行测试 | 选择模式（在线 / 离线 / 虚拟信道）与步骤后直接调用 `main.py`，日志实时显示，完成自动刷新 |
+
+顶部通过 `run_id` 下拉框切换实验；在"传输实验结果"页点击记录表的行也可切换。数据来自 `data/codeplot_assets/<run_id>/data/*.npz` 与 `data/records/record_*.json`，运行新实验后点"刷新数据"即可。
+
 ## 传输记录
 
 每次完整测试都会自动生成唯一编号 `run_id`（形如 `20260731_024911_164ad1`），并在 `data/records/` 下保存：
