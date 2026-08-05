@@ -1314,6 +1314,9 @@ class DmtGuiApp(tk.Tk):
         self.notebook.add(tab4, text="  ▶ 运行测试  ")
         self.panel_run = tab4
 
+        # 默认显示"运行测试"页面（第 4 个 tab，索引 3）
+        self.notebook.select(3)
+        
         # ── 状态栏 ─────────────────────────────────────────────────
         self.status_var = tk.StringVar()
         status = tk.Label(self, textvariable=self.status_var, anchor=tk.W,

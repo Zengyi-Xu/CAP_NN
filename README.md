@@ -69,6 +69,31 @@ python main.py --offline 1 --use-awg 0 --use-nn 1
 
 离线模式默认读取 `data/rxdata/` 下已有的示波器文件；当 `--use-virtual-channel 1` 时直接用虚拟信道生成 RX。
 
+#### 通过后缀定位离线波形
+
+在线采集的波形现在会以 `rawOSC_QPSK_SNRest_<run_id>.txt` 和 `rawOSC_DMT_<run_id>.txt` 保存（`run_id` 形如 `20260806_013459_dee786`）。离线 rerun 时，只需输入最后 6 位即可自动定位同一组实验的两个阶段：
+
+```bash
+python main.py --offline 1 --use-awg 0 --run-suffix dee786
+```
+
+这等价于同时指定：
+
+```bash
+python main.py --offline 1 --use-awg 0 \
+  --qpsk-rx data/rxdata/rawOSC_QPSK_SNRest_20260806_013459_dee786.txt \
+  --bpl-rx  data/rxdata/rawOSC_DMT_20260806_013459_dee786.txt
+```
+
+如果只想重新处理某一阶段，也可以配合 `--step`：
+
+```bash
+python main.py --offline 1 --step step2 --run-suffix dee786
+python main.py --offline 1 --step step4 --run-suffix dee786
+```
+
+> 提示：`--run-suffix` 与 `--qpsk-rx` / `--bpl-rx` 同时存在时，显式路径优先。
+
 ### 2. 在线运行（连接 M8190A + 示波器）
 
 修改 `config.py` 中的 VISA 地址：

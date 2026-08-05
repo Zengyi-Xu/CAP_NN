@@ -43,14 +43,50 @@ from virtual_channel import VirtualChannel
 from record import generate_run_id, save_record
 
 
-def _resolve_offline_rx_file(pattern: str) -> Path:
-    """离线模式下定位 RX 文件：先按 count.txt，没有再按修改时间找最新的匹配文件."""
+def _resolve_offline_rx_file(pattern: str, run_suffix: str = None) -> Path:
+    """离线模式下定位 RX 文件.
+
+    优先级：
+        1. 若提供 run_suffix（run_id 最后 6 位），优先匹配 *_{run_suffix}.txt
+        2. count.txt 中的序号（兼容旧版命名）
+        3. 按修改时间取最新的匹配文件
+    """
+    # 1) 按后缀定位（实验编号最后 6 位）
+    if run_suffix:
+        stage_prefix = pattern.replace("_*.txt", "")
+        suffix_pattern = f"*{run_suffix}.txt"
+        matches = sorted(config.RXDATA_DIR.glob(suffix_pattern),
+                         key=lambda p: p.stat().st_mtime, reverse=True)
+        if matches:
+            stage_matches = [m for m in matches if m.name.startswith(stage_prefix)]
+            if stage_matches:
+                print(f"Resolved {pattern} by run suffix '{run_suffix}': {stage_matches[0]}")
+                return stage_matches[0]
+            # 没有严格的 rawOSC 文件时，优先匹配同阶段关键字（如 QPSK_SNRest / DMT）
+            stage_keyword = stage_prefix.replace("rawOSC_", "")
+            keyword_matches = [m for m in matches if stage_keyword in m.name]
+            if keyword_matches:
+                print(f"[WARN] No {stage_prefix} file with suffix '{run_suffix}'; "
+                      f"using {keyword_matches[0]}")
+                return keyword_matches[0]
+            print(f"[WARN] No {stage_prefix} file with suffix '{run_suffix}'; "
+                  f"using best match: {matches[0]}")
+            return matches[0]
+        raise FileNotFoundError(
+            f"Offline RX file with suffix '{run_suffix}' not found.\n"
+            f"  Searched pattern: {config.RXDATA_DIR / suffix_pattern}\n"
+            f"  Hint: use --use-virtual-channel 1, or provide --qpsk-rx / --bpl-rx path."
+        )
+
+    # 2) 兼容旧版 count 命名
     count = 0
     if config.COUNT_FILE.exists():
         count = int(load_txt(config.COUNT_FILE))
     candidate = config.RXDATA_DIR / pattern.replace("*", str(count))
     if candidate.exists():
         return candidate
+
+    # 3) 取最新匹配文件
     matches = sorted(config.RXDATA_DIR.glob(pattern),
                      key=lambda p: p.stat().st_mtime, reverse=True)
     if matches:
@@ -161,7 +197,8 @@ def step2_receive_qpsk(tx_dict: dict,
                        rx_file: Path = None,
                        use_virtual_channel: bool = False,
                        plot_dir: Path = None,
-                       run_id: str = None):
+                       run_id: str = None,
+                       run_suffix: str = None):
     """STEP2: 接收 QPSK 波形并估计每载波 SNR."""
     print("\n========== STEP2: Receive QPSK & Estimate SNR ==========")
     
@@ -177,11 +214,14 @@ def step2_receive_qpsk(tx_dict: dict,
     elif offline:
         try:
             if rx_file is None:
-                rx_file = _resolve_offline_rx_file("rawOSC_QPSK_SNRest_*.txt")
+                rx_file = _resolve_offline_rx_file("rawOSC_QPSK_SNRest_*.txt",
+                                                   run_suffix=run_suffix)
             rx = load_txt(rx_file)
             rx_source = "measured_offline"
             print(f"Loaded offline RX data from {rx_file}")
         except FileNotFoundError:
+            if run_suffix:
+                raise
             print("[WARN] Offline QPSK RX file not found, falling back to virtual channel")
             ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
             rx = ch.apply(tx_waveform)
@@ -196,10 +236,7 @@ def step2_receive_qpsk(tx_dict: dict,
                                   sample_rate=config.OSC_SAMPLE_RATE,
                                   timebase_scale=80e-6,
                                   resample_to_awg=True)
-        count = 0
-        if config.COUNT_FILE.exists():
-            count = int(load_txt(config.COUNT_FILE))
-        rx_file = config.RXDATA_DIR / f"rawOSC_QPSK_SNRest_{count}.txt"
+        rx_file = config.RXDATA_DIR / f"rawOSC_QPSK_SNRest_{run_id}.txt"
         save_txt(rx_file, rx)
         cfg_path = save_rx_config(
             rx_file,
@@ -218,10 +255,8 @@ def step2_receive_qpsk(tx_dict: dict,
             pilot_pattern=config.PILOT_PATTERN,
             pre_equ_flag=config.PRE_EQU_FLAG,
             rx_length=len(rx),
-            count=count,
         )
         print(f"Saved RX config to {cfg_path}")
-        save_txt(config.COUNT_FILE, np.array([count + 1]), fmt="%d")
 
     # 同步
     rx_sync = sync_waveform(rx, tx_waveform)
@@ -336,7 +371,8 @@ def step4_receive_bitloading(tx_dict: dict,
                              use_nn: bool = False,
                              use_virtual_channel: bool = False,
                              plot_dir: Path = None,
-                             run_id: str = None):
+                             run_id: str = None,
+                             run_suffix: str = None):
     """STEP4: 接收 bitloading 波形并解调/计算 BER/SER."""
     print("\n========== STEP4: Receive Bitloading & Demodulate ==========")
     
@@ -366,11 +402,14 @@ def step4_receive_bitloading(tx_dict: dict,
     elif offline:
         try:
             if rx_file is None:
-                rx_file = _resolve_offline_rx_file("rawOSC_DMT_*.txt")
+                rx_file = _resolve_offline_rx_file("rawOSC_DMT_*.txt",
+                                                   run_suffix=run_suffix)
             rx = load_txt(rx_file)
             rx_source = "measured_offline"
             print(f"Loaded offline RX data from {rx_file}")
         except FileNotFoundError:
+            if run_suffix:
+                raise
             print("[WARN] Offline bitloading RX file not found, falling back to virtual channel")
             ch = VirtualChannel(fs=config.AWG_SAMPLE_RATE)
             rx = ch.apply(tx_waveform)
@@ -385,10 +424,7 @@ def step4_receive_bitloading(tx_dict: dict,
                                   sample_rate=config.OSC_SAMPLE_RATE,
                                   timebase_scale=60e-6,
                                   resample_to_awg=True)
-        count = 0
-        if config.COUNT_FILE.exists():
-            count = int(load_txt(config.COUNT_FILE))
-        rx_file = config.RXDATA_DIR / f"rawOSC_DMT_{count}.txt"
+        rx_file = config.RXDATA_DIR / f"rawOSC_DMT_{run_id}.txt"
         save_txt(rx_file, rx)
         cfg_path = save_rx_config(
             rx_file,
@@ -408,10 +444,8 @@ def step4_receive_bitloading(tx_dict: dict,
             pre_equ_flag=config.PRE_EQU_FLAG,
             use_nn=use_nn,
             rx_length=len(rx),
-            count=count,
         )
         print(f"Saved RX config to {cfg_path}")
-        save_txt(config.COUNT_FILE, np.array([count + 1]), fmt="%d")
 
     # 同步
     rx_sync = sync_waveform(rx, tx_waveform)
@@ -479,7 +513,8 @@ def run_full_pipeline(offline: bool = False,
                       use_nn: bool = False,
                       use_virtual_channel: bool = False,
                       qpsk_rx_file: Path = None,
-                      bpl_rx_file: Path = None):
+                      bpl_rx_file: Path = None,
+                      run_suffix: str = None):
     """运行完整 DMT 流程."""
     # 初始化计数器与本次测试唯一编号
     if not config.COUNT_FILE.exists():
@@ -509,7 +544,8 @@ def run_full_pipeline(offline: bool = False,
                                             rx_file=qpsk_rx_file,
                                             use_virtual_channel=use_virtual_channel,
                                             plot_dir=plot_dir,
-                                            run_id=run_id)
+                                            run_id=run_id,
+                                            run_suffix=run_suffix)
 
     # STEP3 + STEP4
     tx_bpl = step3_generate_bitloading_tx(snrs,
@@ -523,7 +559,8 @@ def run_full_pipeline(offline: bool = False,
                                    use_nn=use_nn,
                                    use_virtual_channel=use_virtual_channel,
                                    plot_dir=plot_dir,
-                                   run_id=run_id)
+                                   run_id=run_id,
+                                   run_suffix=run_suffix)
 
     # 保存传输记录
     mean_recovered_snr = np.nanmean(res["SNR_R"])
@@ -560,8 +597,8 @@ def run_full_pipeline(offline: bool = False,
 
 def main():
     parser = argparse.ArgumentParser(description="DMT Python Pipeline")
-    parser.add_argument("--offline", type=int, default=0,
-                        help="1=offline (read files), 0=online AWG+Scope (default: 0)")
+    parser.add_argument("--offline", type=int, default=config.OFFLINE_FLAG,
+                        help="1=offline (read files), 0=online AWG+Scope (default follows OFFLINE_FLAG)")
     parser.add_argument("--use-awg", type=int, default=0,
                         help="1=download waveform to M8190A")
     parser.add_argument("--use-nn", type=int, default=config.USE_NN,
@@ -573,6 +610,9 @@ def main():
                         help="Path to offline QPSK RX file")
     parser.add_argument("--bpl-rx", type=str, default=None,
                         help="Path to offline bitloading RX file")
+    parser.add_argument("--run-suffix", type=str, default=None,
+                        help="Last 6 characters of run_id to locate offline RX files "
+                             "(e.g. dee786). Auto-matches both QPSK and bitloading stages.")
     parser.add_argument("--step", type=str, default="all",
                         choices=["all", "step1", "step2", "step3", "step4"],
                         help="Run specific step or full pipeline")
@@ -584,6 +624,7 @@ def main():
     use_virtual_channel = bool(args.use_virtual_channel)
     qpsk_rx = Path(args.qpsk_rx) if args.qpsk_rx else None
     bpl_rx = Path(args.bpl_rx) if args.bpl_rx else None
+    run_suffix = args.run_suffix
 
     if not config.COUNT_FILE.exists():
         save_txt(config.COUNT_FILE, np.array([0]), fmt="%d")
@@ -604,7 +645,8 @@ def main():
                           use_nn=use_nn,
                           use_virtual_channel=use_virtual_channel,
                           qpsk_rx_file=qpsk_rx,
-                          bpl_rx_file=bpl_rx)
+                          bpl_rx_file=bpl_rx,
+                          run_suffix=run_suffix)
     elif args.step == "step1":
         step1_generate_qpsk_tx(use_awg=use_awg, plot_dir=plot_dir, run_id=run_id)
     elif args.step == "step2":
@@ -614,7 +656,8 @@ def main():
                            rx_file=qpsk_rx,
                            use_virtual_channel=use_virtual_channel,
                            plot_dir=plot_dir,
-                           run_id=run_id)
+                           run_id=run_id,
+                           run_suffix=run_suffix)
     elif args.step == "step3":
         snrs = load_txt(config.FINAL_SNR_QPSK)
         step3_generate_bitloading_tx(snrs,
@@ -633,7 +676,8 @@ def main():
                                  use_nn=use_nn,
                                  use_virtual_channel=use_virtual_channel,
                                  plot_dir=plot_dir,
-                                 run_id=run_id)
+                                 run_id=run_id,
+                                 run_suffix=run_suffix)
 
 
 if __name__ == "__main__":

@@ -195,7 +195,7 @@ PLOT_SHOW = True                   # 是否在 Spyder 中 plt.show() 显示图�
 PLOT_SAVE = False                  # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
 PLOT_DPI = 300                     # 默认图像分辨率（Spyder 显示与保存共用）
 
-POSTEQ_FLAG = 0                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
+POSTEQ_FLAG = 3                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
 USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
 
 

@@ -150,7 +150,7 @@ rx = data["rx"]
 
 ax = fig.add_subplot(111)
 if len(tx) > 5000:
-    hb = ax.hexbin(tx, rx, gridsize=80, cmap="GnBu", mincnt=1)
+    hb = ax.hexbin(tx, rx, gridsize=30, cmap="GnBu", mincnt=1)
     fig.colorbar(hb, ax=ax, label="Density")
 else:
     ax.plot(tx, rx, "b.", alpha=0.2, markersize=3)
@@ -265,7 +265,7 @@ for idx, bits in enumerate(orders):
     pts = np.concatenate(pts)
     ideal = np.concatenate(ideal)
 
-    gridsize = max(30, 2 * int(2 ** (bits / 2)))
+    gridsize = max(60, 8 * int(2 ** (bits / 2)))
     hb = ax.hexbin(pts.real, pts.imag, gridsize=gridsize, cmap="GnBu", mincnt=1)
     fig.colorbar(hb, ax=ax, label="Density")
 
@@ -408,7 +408,8 @@ def plot_constellation_density(out2, in_ref, RQ, pilot_mask, title: str,
             "pilot_mask": np.asarray(pilot_mask),
         },
         script_template=_CONST_DENSITY_TEMPLATE,
-        script_vars={"title": title}
+        script_vars={"title": title},
+        
     )
 
 
