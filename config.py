@@ -191,7 +191,7 @@ NN_MODEL_TEMP = NN_DIR / "trained_model_temp.pth"
 # -----------------------------------------------------------------------------
 # 绘图与后均衡选项
 # -----------------------------------------------------------------------------
-PLOT_SHOW = True                   # 是否在 Spyder 中 plt.show() 显示图像
+PLOT_SHOW = False                   # 是否在 Spyder 中 plt.show() 显示图像
 PLOT_SAVE = False                  # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
 PLOT_DPI = 300                     # 默认图像分辨率（Spyder 显示与保存共用）
 
