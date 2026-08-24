@@ -123,9 +123,20 @@ def list_records():
 # 绘图函数（与 plot_adapter.py 中的 CodePlot 模板保持一致）
 # ═══════════════════════════════════════════════════════════════════════════════
 
+FAST_PLOT_STEP = 100        # fast plot mode：每 100 个采样点只画 1 个
+_fast_plot_var = None       # 由主窗口的复选框赋值（tk.BooleanVar）
+
+
+def fast_plot_enabled():
+    """是否启用 fast plot mode（时域/频域波形跳采样绘图）."""
+    return _fast_plot_var is not None and bool(_fast_plot_var.get())
+
+
 def build_time(fig, npz_path, title):
     data = np.load(npz_path)
     t, sig = data["t"], data["sig"]
+    if fast_plot_enabled():
+        t, sig = t[::FAST_PLOT_STEP], sig[::FAST_PLOT_STEP]
     ax = fig.add_subplot(111)
     ax.plot(t, sig, "b.-", linewidth=1, markersize=2)
     ax.set_title(title)
@@ -141,6 +152,8 @@ def build_spectrum(fig, npz_path, title):
     n = len(sig)
     freqs = np.fft.fftshift(np.fft.fftfreq(n, d=1.0 / fs))
     spec = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
+    if fast_plot_enabled():
+        freqs, spec = freqs[::FAST_PLOT_STEP], spec[::FAST_PLOT_STEP]
     ax = fig.add_subplot(111)
     ax.plot(freqs / 1e9, spec, "b-", linewidth=1)
     ax.set_title(title)
@@ -490,6 +503,9 @@ def apply_styles(root, scale):
                     foreground=COLOR_TEXT, font=font_base,
                     indicatorsize=indicator)
     style.configure("TCheckbutton", background=COLOR_CARD,
+                    foreground=COLOR_TEXT, font=font_base,
+                    indicatorsize=indicator)
+    style.configure("Bg.TCheckbutton", background=COLOR_BG,
                     foreground=COLOR_TEXT, font=font_base,
                     indicatorsize=indicator)
     style.configure("TLabelframe", background=COLOR_CARD,
@@ -1065,7 +1081,7 @@ class RunPanel(ttk.Frame):
 
         btn_bar = tk.Frame(opt, bg=COLOR_CARD)
         btn_bar.grid(row=3, column=0, columnspan=5, sticky=tk.W,
-                     padx=12, pady=(0, 12))
+                     padx=12, pady=(0, 8))
         self.run_btn = ttk.Button(btn_bar, text="▶  开始测试",
                                   style="Accent.TButton",
                                   command=self.start_run)
@@ -1076,6 +1092,20 @@ class RunPanel(ttk.Frame):
         self.stop_btn.pack(side=tk.LEFT)
         self.run_status = ttk.Label(btn_bar, text="就绪", style="DimCard.TLabel")
         self.run_status.pack(side=tk.LEFT, padx=16)
+
+        # ── NN 进度条（训练/预测期间显示，不刷屏） ─────────────────
+        self.progress_frame = tk.Frame(opt, bg=COLOR_CARD)
+        self.progress_frame.grid(row=4, column=0, columnspan=5,
+                                 sticky=tk.W, padx=12, pady=(0, 10))
+        self.progress_frame.grid_remove()
+        self.progress_var = tk.DoubleVar(value=0.0)
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame, variable=self.progress_var,
+            maximum=100.0, length=220)
+        self.progress_bar.pack(side=tk.LEFT)
+        self.nn_status = ttk.Label(self.progress_frame, text="",
+                                   style="Card.TLabel")
+        self.nn_status.pack(side=tk.LEFT, padx=(10, 0))
 
         # ── 下方：左侧 config 参数面板 + 右侧运行日志 ───────────────
         paned = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
@@ -1177,6 +1207,9 @@ class RunPanel(ttk.Frame):
         self.run_btn.configure(state=tk.DISABLED)
         self.stop_btn.configure(state=tk.NORMAL)
         self.run_status.configure(text="运行中…")
+        self.progress_var.set(0.0)
+        self.progress_frame.grid_remove()
+        self.nn_status.configure(text="")
         self.app.set_running(True)
         threading.Thread(target=self._reader, daemon=True).start()
         self.after(100, self._poll)
@@ -1193,6 +1226,10 @@ class RunPanel(ttk.Frame):
             while True:
                 kind, payload = self._queue.get_nowait()
                 if kind == "line":
+                    line = payload.rstrip("\n")
+                    if line.startswith("[NN_PROGRESS]"):
+                        self._update_nn_progress(line)
+                        continue
                     tag = "err" if ("Error" in payload or "Traceback"
                                     in payload) else None
                     self._append_log(payload, tag)
@@ -1203,6 +1240,35 @@ class RunPanel(ttk.Frame):
             pass
         if self.proc is not None:
             self.after(100, self._poll)
+
+    def _update_nn_progress(self, line):
+        """解析 NN 脚本输出的 [NN_PROGRESS] 标记，更新进度条（不写入日志）."""
+        try:
+            payload = json.loads(line.split("[NN_PROGRESS]", 1)[1].strip())
+        except Exception:
+            return
+        phase = payload.get("phase", "train")
+        if phase == "train":
+            epoch = payload.get("epoch", 0)
+            total = payload.get("total", 1) or 1
+            train_loss = payload.get("train_loss")
+            val_loss = payload.get("val_loss")
+            self.progress_var.set(min(100.0, epoch / total * 100.0))
+            parts = [f"NN 训练中… Epoch {epoch}/{total}"]
+            if train_loss is not None:
+                parts.append(f"train_loss={train_loss:.4f}")
+            if val_loss is not None:
+                parts.append(f"val_loss={val_loss:.4f}")
+            self.nn_status.configure(text="  ｜  ".join(parts))
+            self.progress_frame.grid()
+        elif phase == "predict":
+            self.progress_var.set(0.0)
+            self.nn_status.configure(text="NN 预测中…")
+            self.progress_frame.grid()
+        elif phase == "done":
+            self.progress_var.set(100.0)
+            self.nn_status.configure(text="NN 均衡完成")
+            self.progress_frame.grid()
 
     def _on_done(self, code):
         self.proc = None
@@ -1270,6 +1336,15 @@ class DmtGuiApp(tk.Tk):
         self.pill_runs.pack(side=tk.RIGHT, padx=(8, 0))
         self.pill_records = ttk.Label(header, style="Pill.TLabel")
         self.pill_records.pack(side=tk.RIGHT)
+
+        # fast plot mode：时域/频域波形每 100 点只画 1 点，加速渲染
+        global _fast_plot_var
+        self.fast_plot_var = tk.BooleanVar(value=False)
+        _fast_plot_var = self.fast_plot_var
+        ttk.Checkbutton(header, text="Fast plot（1/100 抽点）",
+                        style="Bg.TCheckbutton", variable=self.fast_plot_var,
+                        command=self._on_fast_plot_toggle
+                        ).pack(side=tk.RIGHT, padx=(0, 16))
 
         # ── 实验选择栏 ─────────────────────────────────────────────
         sel = make_card(self)
@@ -1373,6 +1448,14 @@ class DmtGuiApp(tk.Tk):
         self._running = running
         self.run_combo.configure(state="readonly" if not running
                                  else tk.DISABLED)
+
+    def _on_fast_plot_toggle(self):
+        """切换 fast plot mode 后重画各图面板当前选中的图."""
+        for panel in (self.panel_wave, self.panel_mod,
+                      self.results_panel.plot_panel):
+            sel = panel.listbox.curselection()
+            if sel:
+                panel._show(panel._items[sel[0]])
 
 
 def main():
