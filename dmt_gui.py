@@ -811,6 +811,14 @@ class PlotPanel(ttk.Frame):
                     transform=ax.transAxes, color="red")
         self.canvas.draw_idle()
 
+    def _safe_savefig(self, path: Path):
+        """保存图片；若 bbox_inches='tight' 触发 IndexError（如 bit/power loading
+        的双 y 轴图在某些 matplotlib 版本下），则回退到普通保存。"""
+        try:
+            self.fig.savefig(path, dpi=config.PLOT_DPI, bbox_inches="tight")
+        except (IndexError, ValueError):
+            self.fig.savefig(path, dpi=config.PLOT_DPI)
+
     def _export_image(self):
         """导出当前选中图表为 PNG，默认保存到 data/plots/<run_id>/。"""
         sel = self.listbox.curselection()
@@ -841,7 +849,7 @@ class PlotPanel(ttk.Frame):
                 return
         try:
             plot_dir.mkdir(parents=True, exist_ok=True)
-            self.fig.savefig(path, dpi=config.PLOT_DPI, bbox_inches="tight")
+            self._safe_savefig(path)
             # 保存绘图参数元数据
             self._save_plot_metadata(name, path)
             messagebox.showinfo("导出成功", f"已保存到：\n{path}")
@@ -877,8 +885,7 @@ class PlotPanel(ttk.Frame):
                 try:
                     self._show(name)
                     png_path = plot_dir / f"{name}.png"
-                    self.fig.savefig(png_path, dpi=config.PLOT_DPI,
-                                     bbox_inches="tight")
+                    self._safe_savefig(png_path)
                     self._save_plot_metadata(name, png_path)
                     saved += 1
                 except Exception as exc:
