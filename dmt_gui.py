@@ -25,6 +25,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import traceback
 from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 
@@ -143,7 +144,7 @@ def _write_array_to_sheet(ws, arr, start_row=1, start_col=1):
     # 兼容 0 维标量（避免 arr.shape[0] 触发 tuple index out of range）
     if arr.ndim == 0:
         val = arr.item()
-        if isinstance(val, complex):
+        if np.iscomplexobj(arr):
             ws.cell(row=start_row, column=start_col, value=float(val.real))
             ws.cell(row=start_row, column=start_col + 1, value=float(val.imag))
         else:
@@ -223,6 +224,7 @@ def _npz_to_xlsx(npz_path: Path, xlsx_path: Path):
     data = np.load(npz_path)
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
+    errors = []
     for key in data.files:
         arr = data[key]
         if arr.ndim > 2:
@@ -232,8 +234,14 @@ def _npz_to_xlsx(npz_path: Path, xlsx_path: Path):
         ws.cell(row=1, column=1, value=f"Array: {key}")
         ws.cell(row=1, column=2, value=f"Shape: {arr.shape}")
         ws.cell(row=1, column=3, value=f"Dtype: {arr.dtype}")
-        _write_array_to_sheet(ws, arr, start_row=3, start_col=1)
+        try:
+            _write_array_to_sheet(ws, arr, start_row=3, start_col=1)
+        except Exception as exc:
+            errors.append(f"{key}: {exc}")
+            ws.cell(row=3, column=1, value=f"写入失败: {exc}")
     wb.save(xlsx_path)
+    if errors:
+        raise RuntimeError("部分数组写入失败: " + "; ".join(errors))
 
 
 def list_records():
@@ -980,8 +988,10 @@ class PlotPanel(ttk.Frame):
         try:
             _npz_to_xlsx(npz, Path(path))
             messagebox.showinfo("导出成功", f"已保存到：\n{path}")
-        except Exception as exc:
-            messagebox.showerror("导出失败", str(exc))
+        except Exception:
+            tb = traceback.format_exc()
+            print(tb)
+            messagebox.showerror("导出失败", f"导出当前图表数据失败：\n{tb}")
 
     def _export_all_data(self):
         """一键导出当前实验所有图表数据到 Excel（不同数组分 sheet）."""
@@ -1025,8 +1035,10 @@ class PlotPanel(ttk.Frame):
             wb.save(path)
             messagebox.showinfo("导出成功", f"已保存到：\n{path}\n"
                                            f"共导出 {len(names)} 张图的数据")
-        except Exception as exc:
-            messagebox.showerror("导出失败", str(exc))
+        except Exception:
+            tb = traceback.format_exc()
+            print(tb)
+            messagebox.showerror("导出失败", f"导出全部图表数据失败：\n{tb}")
 
 
 class ResultsPanel(ttk.Frame):
