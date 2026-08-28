@@ -817,14 +817,14 @@ def generate_bitloading_tx(snrs: np.ndarray,
     if constellation == config.CONSTELLATION_APSK:
         snr_table = load_snr_table(config.SNR_TABLE_APSK5)
         qam_order_all = assign_qam_order_from_snr(snrs, snr_table)
-        ratio = cfg.get("ratio", 100)
+        ratio = cfg.get("ratio", 180)
         S_hh, RQ_hh, raise_num = bit_loading_hh(snrs, qam_order_all, snr_table)
         SE_add = raise_num - ratio
         S, RQ = bit_loading_lc(snrs, qam_order_all, snr_table, SE_add=SE_add)
     else:
         snr_table = load_snr_table(config.SNR_TABLE_FEC4)
         qam_order_all = assign_qam_order_from_snr(snrs, snr_table)
-        ratio = cfg.get("ratio", 100)
+        ratio = cfg.get("ratio", 180)
         S_hh, RQ_hh, raise_num = bit_loading_hh(snrs, qam_order_all, snr_table)
         SE_add = raise_num - ratio
         S, RQ = bit_loading_lc(snrs, qam_order_all, snr_table, SE_add=SE_add)
@@ -861,49 +861,75 @@ def generate_bitloading_tx(snrs: np.ndarray,
 def phase_recovery(Rx: np.ndarray, Tx: np.ndarray,
                    carriernum: int, symnum: int,
                    start: int = 50) -> Tuple[np.ndarray, np.ndarray]:
-    """相位恢复 (port from MATLAB phaseRecovery.m)."""
-    Rx = Rx.reshape(carriernum, symnum)
-    Tx = Tx.reshape(carriernum, symnum)
-    y = np.zeros((carriernum, symnum))
-    Rx_recovery = np.zeros_like(Rx, dtype=complex)
+    """相位恢复（兼容 bit-loading 的空子载波）。
 
-    preamnum = 4
-    preamble = np.floor(np.linspace(start, carriernum, preamnum)).astype(int)
+    Bit-loading 时 RQ=0 的子载波对应 Tx=0，不能直接使用 Rx/Tx 计算相位。
+    这里只使用实际发送了非零参考符号的有效子载波估计相位：
+        angle(Rx * conj(Tx)) == angle(Rx / Tx)  (Tx != 0)
+    这样可以避免 0/0 或 nonzero/0 产生 NaN/Inf，继而导致 polyfit/SVD 崩溃。
+    """
+    Rx = np.asarray(Rx).reshape(carriernum, symnum)
+    Tx = np.asarray(Tx).reshape(carriernum, symnum)
+
+    y = np.zeros((carriernum, symnum), dtype=float)
+    carrier_idx = np.arange(carriernum, dtype=float)
+    eps = 1e-12
 
     for t in range(symnum):
-        phase_noise_s_temp = smooth(np.angle(Rx[:, t] / Tx[:, t]), window_len=20)
-        max_p = np.max(phase_noise_s_temp[50:])
-        max_idx = np.argmax(phase_noise_s_temp[50:]) + 50
-        min_p = np.min(phase_noise_s_temp[50:])
-        min_idx = np.argmin(phase_noise_s_temp[50:]) + 50
-        delta_p = max_p - min_p
+        rx_t = Rx[:, t]
+        tx_t = Tx[:, t]
 
-        if delta_p > 5 and min_idx - 5 > start and max_idx + 5 < carriernum:
-            n1 = np.arange(start, min_idx - 5)
-            nn1 = phase_noise_s_temp[start:min_idx - 5]
-            n2 = np.arange(max_idx + 5, carriernum)
-            nn2 = phase_noise_s_temp[max_idx + 5:carriernum] - 2 * np.pi
-            n = np.concatenate([n1, n2])
-            nn = np.concatenate([nn1, nn2])
-            fitcurve = np.polyfit(n, nn, 1)
-            fitval = np.polyval(fitcurve, np.arange(carriernum))
-            y[:, t] = fitval
-        else:
-            end_idx = min(preamble[-1], carriernum - 1)
-            n = np.arange(start, end_idx + 1)
-            nn = phase_noise_s_temp[start:end_idx + 1]
-            if len(n) < 2:
-                y[:, t] = 0.0
-            else:
-                fitcurve = np.polyfit(n, nn, 1)
-                fitval = np.polyval(fitcurve, np.arange(carriernum))
-                y[:, t] = fitval
+        valid = (
+            (carrier_idx >= start)
+            & (np.abs(tx_t) > eps)
+            & np.isfinite(tx_t.real)
+            & np.isfinite(tx_t.imag)
+            & np.isfinite(rx_t.real)
+            & np.isfinite(rx_t.imag)
+        )
+        idx = np.flatnonzero(valid)
 
-    y_new = np.zeros((carriernum, symnum))
+        if idx.size < 2:
+            y[:, t] = 0.0
+            continue
+
+        phase_valid = np.angle(rx_t[idx] * np.conj(tx_t[idx]))
+        finite_phase = np.isfinite(phase_valid)
+        idx = idx[finite_phase]
+        phase_valid = phase_valid[finite_phase]
+
+        if idx.size < 2:
+            y[:, t] = 0.0
+            continue
+
+        # 先解缠，避免 +pi/-pi 跳变破坏线性拟合。
+        phase_valid = np.unwrap(phase_valid)
+
+        # 对空子载波位置只做插值以得到连续相位轨迹；真正拟合仍使用有效载波。
+        phase_interp = np.interp(carrier_idx, idx.astype(float), phase_valid)
+        if carriernum >= 3:
+            phase_interp = smooth(phase_interp, window_len=min(20, carriernum))
+
+        n = idx.astype(float)
+        nn = phase_interp[idx]
+        finite_fit = np.isfinite(n) & np.isfinite(nn)
+        n = n[finite_fit]
+        nn = nn[finite_fit]
+
+        if n.size < 2:
+            y[:, t] = 0.0
+            continue
+
+        fitcurve = np.polyfit(n, nn, 1)
+        y[:, t] = np.polyval(fitcurve, carrier_idx)
+
+    # 保留原程序的时间方向处理：由首/末符号的频率相位斜率线性插值。
+    y_new = np.zeros((carriernum, symnum), dtype=float)
     y1 = y[:, 0]
     y2 = y[:, -1]
     for i in range(carriernum):
         y_new[i, :] = np.linspace(y1[i], y2[i], symnum)
+
     Rx_recovery = Rx * np.exp(-1j * y_new)
     return Rx_recovery, y_new
 
@@ -962,6 +988,17 @@ def dmt_receiver(rx_waveform: np.ndarray,
     pilot_mask = tx_dict.get("pilot_mask", np.zeros((carrierno1, datano), dtype=bool))
     use_pilots = pilot_mask.any()
 
+    # Bit-loading 中 RQ=0 表示该子载波不承载数据。
+    # 后续的信道估计、SNR 和 BER 统计均使用同一 active_carrier 掩码。
+    RQ = tx_dict.get("RQ", None)
+    if RQ is not None:
+        rq_arr = np.asarray(RQ).ravel()
+        active_carrier = np.zeros(carrierno1, dtype=bool)
+        ncopy = min(carrierno1, rq_arr.size)
+        active_carrier[:ncopy] = rq_arr[:ncopy] > 0
+    else:
+        active_carrier = np.any(np.abs(in_ref) > 1e-12, axis=1)
+
     if use_pilots:
         # 导频辅助信道估计
         H = estimate_channel_from_pilots(out, in_ref, pilot_mask)
@@ -971,15 +1008,53 @@ def dmt_receiver(rx_waveform: np.ndarray,
         Rx_recovery, _ = phase_recovery_from_pilots(out2, in_ref, pilot_mask)
         ha = np.mean(H, axis=1)
     else:
-        # 传统 training symbol 信道估计
-        h1 = in_ref[:, :trainingno] / out[:, :trainingno]
-        h1 = h1.T  # (trainingno, carrierno1)
-        ha = np.mean(h1, axis=0)
-        ha = smooth(ha, window_len=7)
+        # 传统 training symbol 信道估计。
+        # 不能直接 in_ref/out：RQ=0 时 in_ref=0，可能产生 0/0 -> NaN，
+        # 随后的频率平滑又会把 NaN 扩散到相邻有效子载波。
+        tx_train = in_ref[:, :trainingno]
+        rx_train = out[:, :trainingno]
+        h1 = np.full(tx_train.shape, np.nan + 1j * np.nan, dtype=complex)
+        valid_div = (
+            active_carrier[:, None]
+            & (np.abs(tx_train) > 1e-12)
+            & (np.abs(rx_train) > 1e-12)
+            & np.isfinite(tx_train.real)
+            & np.isfinite(tx_train.imag)
+            & np.isfinite(rx_train.real)
+            & np.isfinite(rx_train.imag)
+        )
+        np.divide(tx_train, rx_train, out=h1, where=valid_div)
+
+        finite_h1 = np.isfinite(h1.real) & np.isfinite(h1.imag)
+        count_h1 = np.sum(finite_h1, axis=1)
+        ha_raw = np.full(carrierno1, np.nan + 1j * np.nan, dtype=complex)
+        good_rows = count_h1 > 0
+        if np.any(good_rows):
+            h1_zeroed = np.where(finite_h1, h1, 0.0 + 0.0j)
+            ha_raw[good_rows] = (
+                np.sum(h1_zeroed[good_rows], axis=1) / count_h1[good_rows]
+            )
+
+        # 为了进行频率方向平滑，仅在空子载波位置插值信道系数。
+        valid_h = active_carrier & np.isfinite(ha_raw.real) & np.isfinite(ha_raw.imag)
+        valid_idx = np.flatnonzero(valid_h)
+        carrier_idx = np.arange(carrierno1)
+        if valid_idx.size >= 2:
+            ha_fill = (
+                np.interp(carrier_idx, valid_idx, ha_raw[valid_idx].real)
+                + 1j * np.interp(carrier_idx, valid_idx, ha_raw[valid_idx].imag)
+            )
+        elif valid_idx.size == 1:
+            ha_fill = np.full(carrierno1, ha_raw[valid_idx[0]], dtype=complex)
+        else:
+            # 极端情况下没有可用 training symbol，保持单位信道，避免产生 NaN。
+            ha_fill = np.ones(carrierno1, dtype=complex)
+
+        ha = smooth(ha_fill, window_len=7)
         H = np.tile(ha, (datano, 1)).T
         out2 = out * H
         out2_temp = out2.copy()
-        # 相位恢复
+        # 相位恢复（内部会自动跳过 RQ=0 / Tx=0 的子载波）
         Rx_recovery, _ = phase_recovery(out2, in_ref, carrierno1, datano, start=50)
 
     # 反归一化
@@ -988,65 +1063,102 @@ def dmt_receiver(rx_waveform: np.ndarray,
     out2_denorm = Rx_recovery * AVT
     out3 = out2_temp * AVT
 
-    # 计算 SNR（跳过导频位置）
-    # 与 MATLAB 保持一致：SNR = mean(|in|^2) / mean(|out2 - in|^2)
-    # 即发送信号功率 / 误差功率（1/EVM^2）
-    SNR_R = np.full(carrierno1, np.nan)
+    # ------------------------------------------------------------------
+    # SNR：只统计真正承载数据的 active_carrier，并跳过导频位置。
+    # MATLAB 定义：SNR = mean(|Tx|^2) / mean(|Rx-Tx|^2) = 1/EVM^2
+    # ------------------------------------------------------------------
+    SNR_R = np.full(carrierno1, np.nan, dtype=float)
     for n in range(carrierno1):
+        if not active_carrier[n]:
+            continue
+
         valid = ~pilot_mask[n, :]
+        valid &= (
+            np.isfinite(in_denorm[n, :].real)
+            & np.isfinite(in_denorm[n, :].imag)
+            & np.isfinite(out2_denorm[n, :].real)
+            & np.isfinite(out2_denorm[n, :].imag)
+        )
         if not np.any(valid):
             continue
-        sig_pow = np.mean(np.abs(in_denorm[n, valid]) ** 2)
-        err_pow = np.mean(np.abs(out2_denorm[n, valid] - in_denorm[n, valid]) ** 2)
-        if err_pow == 0 or not np.isfinite(err_pow):
-            SNR_R[n] = 1e12
-        else:
-            SNR_R[n] = sig_pow / err_pow
 
-    # 对纯导频子载波（comb 中整列为导频），用最近邻数据子载波 SNR 填充
-    valid_idx = np.where(np.isfinite(SNR_R) & (SNR_R > 0))[0]
-    if len(valid_idx) > 0:
-        for n in np.where(~np.isfinite(SNR_R))[0]:
-            nearest = valid_idx[np.argmin(np.abs(valid_idx - n))]
+        sig_pow = float(np.mean(np.abs(in_denorm[n, valid]) ** 2))
+        err_pow = float(np.mean(np.abs(out2_denorm[n, valid] - in_denorm[n, valid]) ** 2))
+
+        if not np.isfinite(sig_pow) or sig_pow <= 1e-15:
+            continue
+        if not np.isfinite(err_pow) or err_pow <= 1e-15:
+            # 理想的零误差对应无限 SNR；这里保留 NaN，不用任意 1e12 污染平均值。
+            continue
+
+        SNR_R[n] = sig_pow / err_pow
+
+    # 只对“有效但偶发估计失败”的数据子载波做最近邻补值。
+    # RQ=0 的空子载波始终保持 NaN，不再参与平均 SNR。
+    valid_snr_idx = np.where(active_carrier & np.isfinite(SNR_R) & (SNR_R > 0))[0]
+    missing_active_idx = np.where(active_carrier & ~np.isfinite(SNR_R))[0]
+    if len(valid_snr_idx) > 0:
+        for n in missing_active_idx:
+            nearest = valid_snr_idx[np.argmin(np.abs(valid_snr_idx - n))]
             SNR_R[n] = SNR_R[nearest]
-    else:
-        SNR_R[:] = 1.0
 
-    # 解调并计算误码（跳过导频位置）
+    # ------------------------------------------------------------------
+    # 硬判决解调 + 实测 BER/SER（跳过 RQ=0 和导频位置）
+    # ------------------------------------------------------------------
     rx_dec = np.zeros_like(in_denorm, dtype=int)
-    ber_total = 0.0
+    bit_errors_total = 0
     bits_total = 0
+    symbol_errors_total = 0
+    symbols_total = 0
     ber_per_carrier = np.zeros(carrierno1)
     ser_per_carrier = np.zeros(carrierno1)
     bits_per_carrier = np.zeros(carrierno1, dtype=int)
-    RQ = tx_dict.get("RQ", None)
+
     for n in range(carrierno1):
         if RQ is not None:
-            bits = int(RQ[n])
+            bits = int(np.asarray(RQ).ravel()[n])
         else:
-            bits = int(np.log2(np.max(tx_dict["origin_dec_data"][n, :]) + 1))
+            max_symbol = int(np.max(tx_dict["origin_dec_data"][n, :]))
+            bits = int(np.ceil(np.log2(max_symbol + 1))) if max_symbol > 0 else 0
+
         bits_per_carrier[n] = bits
         if bits < 1:
             continue
+
         order = 2 ** bits
-        dec = qam_demodulate(out2_denorm[n, :], order, tx_dict.get("constellation", "QAM"))
+        dec = qam_demodulate(
+            out2_denorm[n, :], order, tx_dict.get("constellation", "QAM")
+        )
         rx_dec[n, :] = dec
+
         valid = ~pilot_mask[n, :]
         n_valid = int(np.sum(valid))
         if n_valid == 0:
             continue
-        err_sym = int(np.sum(dec[valid] != tx_dict["origin_dec_data"][n, valid]))
-        ser_per_carrier[n] = err_sym / n_valid
-        # 精确比特错误数：对每个错误符号做 XOR 后统计 1 的个数
-        diff = np.bitwise_xor(dec[valid], tx_dict["origin_dec_data"][n, valid]).astype(np.uint16)
-        diff_u8 = diff.view(np.uint8)
-        bits_matrix = np.unpackbits(diff_u8).reshape(-1, 16)
-        bit_errs = int(bits_matrix[:, :bits].sum())
-        ber_per_carrier[n] = bit_errs / (n_valid * bits)
-        bits_total += bits * n_valid
-        ber_total += bit_errs
 
-    ber = ber_total / bits_total if bits_total > 0 else 0.0
+        tx_dec = tx_dict["origin_dec_data"][n, valid].astype(np.uint16)
+        rx_dec_valid = dec[valid].astype(np.uint16)
+
+        # 符号错误数
+        err_sym = int(np.count_nonzero(rx_dec_valid != tx_dec))
+        ser_per_carrier[n] = err_sym / n_valid
+        symbol_errors_total += err_sym
+        symbols_total += n_valid
+
+        # 比特错误数：发送端将 bits 个比特按 MSB-first 转为十进制符号编号。
+        # XOR 后所有差异都位于整数的低 bits 位。
+        # 原代码 np.unpackbits(... )[:, :bits] 取到了高位，因此会把真实错误误判为 0。
+        diff = np.bitwise_xor(rx_dec_valid, tx_dec)
+        bit_errs = 0
+        for k in range(bits):
+            bit_errs += int(np.count_nonzero(diff & np.uint16(1 << k)))
+
+        ber_per_carrier[n] = bit_errs / (n_valid * bits)
+        bit_errors_total += bit_errs
+        bits_total += bits * n_valid
+
+    ber = bit_errors_total / bits_total if bits_total > 0 else 0.0
+    ser = symbol_errors_total / symbols_total if symbols_total > 0 else 0.0
 
     return {
         "out2": out2_denorm,
@@ -1054,7 +1166,7 @@ def dmt_receiver(rx_waveform: np.ndarray,
         "SNR_R": SNR_R,
         "rx_dec": rx_dec,
         "ber": ber,
-        "ser": float(np.mean(ser_per_carrier[bits_per_carrier > 0])),
+        "ser": ser,
         "ber_per_carrier": ber_per_carrier,
         "ser_per_carrier": ser_per_carrier,
         "bits_per_carrier": bits_per_carrier,

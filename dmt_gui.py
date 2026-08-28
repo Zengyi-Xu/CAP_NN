@@ -8,8 +8,8 @@
     4. 运行测试     —— 通过 GUI 调用 main.py 完成实验，日志实时显示
 
 数据来源（与 main.py 自动保存一致）：
-    data/codeplot_assets/<run_id>/data/*.npz   每次实验的绘图数据
-    data/records/record_<run_id>.json          每次实验的参数与结果记录
+    data/records/record_<run_id>.json          每次实验的参数与结果记录（下拉框主来源）
+    data/codeplot_assets/<run_id>/data/*.npz   每次实验的绘图数据（有则显示图）
 
 运行方式（在项目目录下）：
     .venv\\Scripts\\python dmt_gui.py
@@ -25,7 +25,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +33,21 @@ import matplotlib
 
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+import config
+from record import generate_run_id
+
+try:
+    import openpyxl
+    _HAS_OPENPYXL = True
+except Exception:
+    _HAS_OPENPYXL = False
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _HAS_PIL = True
+except Exception:
+    _HAS_PIL = False
+
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
@@ -45,6 +60,8 @@ ASSETS_DIR = PROJECT_ROOT / "data" / "codeplot_assets"
 RECORDS_DIR = PROJECT_ROOT / "data" / "records"
 MAIN_PY = PROJECT_ROOT / "main.py"
 CONFIG_PY = PROJECT_ROOT / "config.py"
+
+APP_EMOJI = "📶"  # 窗口图标和标题使用的 emoji，可改成你喜欢的表情
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -86,15 +103,6 @@ FONT_MONO = "Consolas"
 # 数据发现
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def list_runs():
-    """扫描 data/codeplot_assets，返回按时间倒序的 run_id 列表."""
-    if not ASSETS_DIR.is_dir():
-        return []
-    runs = [p.name for p in ASSETS_DIR.iterdir()
-            if p.is_dir() and (p / "data").is_dir()]
-    return sorted(runs, reverse=True)
-
-
 def run_data_dir(run_id):
     return ASSETS_DIR / run_id / "data"
 
@@ -103,6 +111,129 @@ def available_plots(run_id, names):
     """返回该 run 实际存在的图名列表（保持 names 顺序）."""
     d = run_data_dir(run_id)
     return [n for n in names if (d / f"{n}.npz").is_file()]
+
+
+def _resolve_source_run_id(step: str, run_suffix: str) -> str:
+    """根据 step 和 run_suffix 解析源 RX 文件对应的完整 run_id."""
+    try:
+        if step in ("all", "step2"):
+            pattern = "rawOSC_QPSK_SNRest_*.txt"
+        elif step == "step4":
+            pattern = "rawOSC_DMT_*.txt"
+        else:
+            return None
+        suffix_pattern = f"*{run_suffix}.txt"
+        matches = sorted(config.RXDATA_DIR.glob(suffix_pattern),
+                         key=lambda p: p.stat().st_mtime, reverse=True)
+        if not matches:
+            return None
+        stage_prefix = pattern.replace("_*.txt", "")
+        stage_matches = [m for m in matches if m.name.startswith(stage_prefix)]
+        target = stage_matches[0] if stage_matches else matches[0]
+        parts = target.stem.split("_")
+        if len(parts) >= 3:
+            return "_".join(parts[-3:])
+    except Exception:
+        pass
+    return None
+
+
+def _write_array_to_sheet(ws, arr, start_row=1, start_col=1):
+    """把 numpy 数组写入 openpyxl sheet；复数拆成 real/imag 两列."""
+    # 兼容 0 维标量（避免 arr.shape[0] 触发 tuple index out of range）
+    if arr.ndim == 0:
+        val = arr.item()
+        if isinstance(val, complex):
+            ws.cell(row=start_row, column=start_col, value=float(val.real))
+            ws.cell(row=start_row, column=start_col + 1, value=float(val.imag))
+        else:
+            ws.cell(row=start_row, column=start_col,
+                    value=float(val) if isinstance(val, (int, float, np.number)) else val)
+        return
+    # 写列头
+    if start_row > 1:
+        if arr.dtype.kind == "c":
+            if arr.ndim == 1:
+                ws.cell(row=start_row - 1, column=start_col, value="real")
+                ws.cell(row=start_row - 1, column=start_col + 1, value="imag")
+            else:
+                for c in range(arr.shape[1]):
+                    ws.cell(row=start_row - 1, column=start_col + c * 2,
+                            value=f"col_{c}_real")
+                    ws.cell(row=start_row - 1, column=start_col + c * 2 + 1,
+                            value=f"col_{c}_imag")
+        else:
+            if arr.ndim == 1:
+                ws.cell(row=start_row - 1, column=start_col, value="value")
+            else:
+                for c in range(arr.shape[1]):
+                    ws.cell(row=start_row - 1, column=start_col + c,
+                            value=f"col_{c}")
+    # 写数据
+    if arr.dtype.kind == "c":
+        for r in range(arr.shape[0]):
+            if arr.ndim == 1:
+                ws.cell(row=start_row + r, column=start_col,
+                        value=float(arr[r].real))
+                ws.cell(row=start_row + r, column=start_col + 1,
+                        value=float(arr[r].imag))
+            else:
+                for c in range(arr.shape[1]):
+                    ws.cell(row=start_row + r, column=start_col + c * 2,
+                            value=float(arr[r, c].real))
+                    ws.cell(row=start_row + r, column=start_col + c * 2 + 1,
+                            value=float(arr[r, c].imag))
+    else:
+        for r in range(arr.shape[0]):
+            if arr.ndim == 1:
+                val = arr[r]
+                ws.cell(row=start_row + r, column=start_col,
+                        value=float(val) if isinstance(val, (int, float, np.number)) else val)
+            else:
+                for c in range(arr.shape[1]):
+                    val = arr[r, c]
+                    ws.cell(row=start_row + r, column=start_col + c,
+                            value=float(val) if isinstance(val, (int, float, np.number)) else val)
+
+
+def _safe_sheet_name(name: str) -> str:
+    """Excel sheet 名不能超过 31 字符且不能含特殊字符."""
+    invalid = ["\\", "/", "?", "*", "[", "]", ":"]
+    for ch in invalid:
+        name = name.replace(ch, "_")
+    return name[:31]
+
+
+def _cleanup_empty_plot_dirs():
+    """删除 data/plots 下所有空文件夹（保留有文件的目录）."""
+    try:
+        if not config.PLOT_DIR.is_dir():
+            return
+        for d in config.PLOT_DIR.iterdir():
+            if d.is_dir() and not any(d.iterdir()):
+                d.rmdir()
+    except Exception:
+        pass
+
+
+def _npz_to_xlsx(npz_path: Path, xlsx_path: Path):
+    """把 NPZ 中每个数组导出到 Excel 的不同 sheet."""
+    if not _HAS_OPENPYXL:
+        raise RuntimeError("缺少 openpyxl，请执行：pip install openpyxl")
+    data = np.load(npz_path)
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for key in data.files:
+        arr = data[key]
+        if arr.ndim > 2:
+            arr = arr.reshape(arr.shape[0], -1)
+        sheet_name = _safe_sheet_name(key)
+        ws = wb.create_sheet(title=sheet_name)
+        ws.cell(row=1, column=1, value=f"Array: {key}")
+        ws.cell(row=1, column=2, value=f"Shape: {arr.shape}")
+        ws.cell(row=1, column=3, value=f"Dtype: {arr.dtype}")
+        _write_array_to_sheet(ws, arr, start_row=3, start_col=1)
+    wb.save(xlsx_path)
 
 
 def list_records():
@@ -529,6 +660,57 @@ def make_card(parent, **pack_kwargs):
     return card
 
 
+def _set_windows_taskbar_icon():
+    """设置 Windows 任务栏图标：需要显式 AppUserModelID 才能脱离默认羽毛."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        # 任意唯一 ID 即可，与 .ico 文件无关
+        app_id = "DMT.PY.NN.GUI.v1"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except Exception:
+        pass
+
+
+def _create_emoji_icon(emoji: str, size: int = 64):
+    """把 emoji 渲染成窗口图标，返回 (PhotoImage, ico_path)."""
+    if not _HAS_PIL:
+        return None, None
+    try:
+        img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(img)
+        # 优先用 Windows 彩色表情字体，找不到再回退
+        font = None
+        for font_name, font_size in [("seguiemj.ttf", size - 8),
+                                      ("segoe ui emoji.ttf", size - 8),
+                                      ("arial.ttf", size - 8)]:
+            try:
+                font = ImageFont.truetype(font_name, font_size)
+                break
+            except Exception:
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), emoji, font=font)
+        x = (size - (bbox[2] - bbox[0])) / 2 - bbox[0]
+        y = (size - (bbox[3] - bbox[1])) / 2 - bbox[1]
+        try:
+            draw.text((x, y), emoji, font=font, embedded_color=True)
+        except Exception:
+            draw.text((x, y), emoji, font=font)
+        png_path = config.DATA_DIR / ".gui_icon.png"
+        ico_path = config.DATA_DIR / ".gui_icon.ico"
+        img.save(png_path)
+        # 生成 Windows 任务栏可用的 ico（多尺寸）
+        sizes = [16, 24, 32, 48, 64, 128, 256]
+        img.save(ico_path, format="ICO", sizes=[(s, s) for s in sizes])
+        photo = tk.PhotoImage(file=str(png_path))
+        return photo, ico_path
+    except Exception:
+        return None, None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # GUI 组件
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -561,6 +743,19 @@ class PlotPanel(ttk.Frame):
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self.listbox.configure(yscrollcommand=sb.set)
         self.listbox.bind("<<ListboxSelect>>", self._on_select)
+
+        ttk.Button(left, text="导出当前图片",
+                   command=self._export_image
+                   ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
+        ttk.Button(left, text="保存全部图片",
+                   command=self._save_all_images
+                   ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
+        ttk.Button(left, text="导出当前图表数据",
+                   command=self._export_data
+                   ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
+        ttk.Button(left, text="导出全部图表数据",
+                   command=self._export_all_data
+                   ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 8))
 
         right = make_card(self)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -615,6 +810,216 @@ class PlotPanel(ttk.Frame):
             ax.text(0.5, 0.5, f"绘图失败：\n{exc}", ha="center", va="center",
                     transform=ax.transAxes, color="red")
         self.canvas.draw_idle()
+
+    def _export_image(self):
+        """导出当前选中图表为 PNG，默认保存到 data/plots/<run_id>/。"""
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo("提示", "请先选择一个图表")
+            return
+        name = self._items[sel[0]]
+        run_id = self.app.current_run
+        if not run_id:
+            messagebox.showinfo("提示", "当前没有选中的实验")
+            return
+
+        plot_dir = config.PLOT_DIR / run_id
+        default_name = f"{name}.png"
+        path = filedialog.asksaveasfilename(
+            title="导出图片",
+            initialdir=str(plot_dir),
+            initialfile=default_name,
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("PDF", "*.pdf"),
+                       ("SVG", "*.svg"), ("All files", "*.*")])
+        if not path:
+            return
+        path = Path(path)
+        if path.is_file():
+            if not messagebox.askyesno("确认覆盖",
+                                       f"文件已存在：\n{path}\n\n是否覆盖？"):
+                return
+        try:
+            plot_dir.mkdir(parents=True, exist_ok=True)
+            self.fig.savefig(path, dpi=config.PLOT_DPI, bbox_inches="tight")
+            # 保存绘图参数元数据
+            self._save_plot_metadata(name, path)
+            messagebox.showinfo("导出成功", f"已保存到：\n{path}")
+        except Exception as exc:
+            messagebox.showerror("导出失败", str(exc))
+
+    def _save_all_images(self):
+        """一键保存当前实验所有图表为 PNG 到 data/plots/<run_id>/。"""
+        run_id = self.app.current_run
+        if not run_id:
+            messagebox.showinfo("提示", "当前没有选中的实验")
+            return
+        names = available_plots(run_id, self.plot_names)
+        if not names:
+            messagebox.showinfo("提示", "当前实验没有可保存的图表")
+            return
+
+        plot_dir = config.PLOT_DIR / run_id
+        existing = sorted([p.name for p in plot_dir.glob("*.png")]) if plot_dir.is_dir() else []
+        if existing:
+            if not messagebox.askyesno(
+                    "确认覆盖",
+                    f"目录 {plot_dir} 中已存在 {len(existing)} 张图片。\n\n"
+                    f"是否覆盖？"):
+                return
+
+        saved = 0
+        errors = []
+        current_name = self._items[self.listbox.curselection()[0]] if self.listbox.curselection() else None
+        try:
+            plot_dir.mkdir(parents=True, exist_ok=True)
+            for name in names:
+                try:
+                    self._show(name)
+                    png_path = plot_dir / f"{name}.png"
+                    self.fig.savefig(png_path, dpi=config.PLOT_DPI,
+                                     bbox_inches="tight")
+                    self._save_plot_metadata(name, png_path)
+                    saved += 1
+                except Exception as exc:
+                    errors.append(f"{name}: {exc}")
+            # 恢复原先显示的图
+            if current_name in self._items:
+                self._show(current_name)
+            else:
+                self._show(self._items[0])
+        except Exception as exc:
+            messagebox.showerror("保存失败", str(exc))
+            return
+        if errors:
+            messagebox.showerror("部分保存失败", "\n".join(errors))
+        else:
+            messagebox.showinfo("保存成功",
+                                f"已保存 {saved} 张图片到：\n{plot_dir}")
+
+    def _save_plot_metadata(self, name, png_path: Path):
+        """把当前图的绘图参数（数组名、形状、数据路径）写成 JSON。"""
+        run_id = self.app.current_run
+        npz = run_data_dir(run_id) / f"{name}.npz"
+        params = {}
+        if npz.is_file():
+            try:
+                data = np.load(npz)
+                params["arrays"] = {
+                    k: {"shape": list(data[k].shape),
+                        "dtype": str(data[k].dtype)}
+                    for k in data.files
+                }
+                params["data_path"] = str(npz)
+            except Exception:
+                pass
+        metadata = {
+            "run_id": run_id,
+            "name": name,
+            "title": FIGURES.get(name, (None, name))[1],
+            "png_path": str(png_path),
+            "parameters": params,
+        }
+        json_path = png_path.with_suffix(".json")
+        try:
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def _export_data(self):
+        """导出当前选中图表的原始数据为 Excel（不同数组分 sheet）."""
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo("提示", "请先选择一个图表")
+            return
+        name = self._items[sel[0]]
+        run_id = self.app.current_run
+        if not run_id:
+            messagebox.showinfo("提示", "当前没有选中的实验")
+            return
+
+        if name == TREND_KEY:
+            # 导出历次实验趋势为 JSON
+            default_name = f"trend_{run_id}.json"
+            path = filedialog.asksaveasfilename(
+                title="导出趋势数据",
+                initialfile=default_name,
+                defaultextension=".json",
+                filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+            if not path:
+                return
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(self.app.records, f, indent=2,
+                              ensure_ascii=False, default=str)
+                messagebox.showinfo("导出成功", f"已保存到：\n{path}")
+            except Exception as exc:
+                messagebox.showerror("导出失败", str(exc))
+            return
+
+        npz = run_data_dir(run_id) / f"{name}.npz"
+        if not npz.is_file():
+            messagebox.showerror("导出失败", f"找不到数据文件：\n{npz}")
+            return
+        default_name = f"{name}_{run_id}.xlsx"
+        path = filedialog.asksaveasfilename(
+            title="导出图表数据",
+            initialfile=default_name,
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            _npz_to_xlsx(npz, Path(path))
+            messagebox.showinfo("导出成功", f"已保存到：\n{path}")
+        except Exception as exc:
+            messagebox.showerror("导出失败", str(exc))
+
+    def _export_all_data(self):
+        """一键导出当前实验所有图表数据到 Excel（不同数组分 sheet）."""
+        run_id = self.app.current_run
+        if not run_id:
+            messagebox.showinfo("提示", "当前没有选中的实验")
+            return
+        names = available_plots(run_id, self.plot_names)
+        if not names:
+            messagebox.showinfo("提示", "当前实验没有可导出的图表数据")
+            return
+
+        default_name = f"all_plots_{run_id}.xlsx"
+        path = filedialog.asksaveasfilename(
+            title="导出全部图表数据",
+            initialfile=default_name,
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            if not _HAS_OPENPYXL:
+                raise RuntimeError("缺少 openpyxl，请执行：pip install openpyxl")
+            wb = openpyxl.Workbook()
+            wb.remove(wb.active)
+            for name in names:
+                npz = run_data_dir(run_id) / f"{name}.npz"
+                if not npz.is_file():
+                    continue
+                data = np.load(npz)
+                for key in data.files:
+                    arr = data[key]
+                    if arr.ndim > 2:
+                        arr = arr.reshape(arr.shape[0], -1)
+                    sheet_name = _safe_sheet_name(f"{name}_{key}")
+                    ws = wb.create_sheet(title=sheet_name)
+                    ws.cell(row=1, column=1, value=f"Plot: {name}")
+                    ws.cell(row=1, column=2, value=f"Array: {key}")
+                    ws.cell(row=1, column=3, value=f"Shape: {arr.shape}")
+                    _write_array_to_sheet(ws, arr, start_row=3, start_col=1)
+            wb.save(path)
+            messagebox.showinfo("导出成功", f"已保存到：\n{path}\n"
+                                           f"共导出 {len(names)} 张图的数据")
+        except Exception as exc:
+            messagebox.showerror("导出失败", str(exc))
 
 
 class ResultsPanel(ttk.Frame):
@@ -721,6 +1126,7 @@ PARAM_GROUPS = [
         ("DATANO_BPL", "int", None),
         ("TRAININGNO", "int", None),
         ("CP_RATIO", "num", None),
+        ("RATIO", "int", None),
         ("NORMALIZE_FLAG", "ichoice", ["0", "1"]),
     ]),
     ("导频图案", [
@@ -1063,9 +1469,46 @@ class RunPanel(ttk.Frame):
                         ).grid(row=2, column=1, columnspan=3, sticky=tk.W,
                                padx=(4, 16), pady=(4, 10))
 
+        # ── 离线定位选项 ─────────────────────────────────────────────
+        offline_frame = ttk.LabelFrame(opt, text=" 离线定位选项（可选） ")
+        offline_frame.grid(row=3, column=0, columnspan=5, sticky=tk.EW,
+                           padx=12, pady=(0, 8))
+
+        ttk.Label(offline_frame, text="STEP2 波形 ID 后六位：",
+                  style="Card.TLabel"
+                  ).grid(row=0, column=0, sticky=tk.W, padx=(8, 4), pady=(8, 4))
+        self.qpsk_suffix_var = tk.StringVar(value="")
+        ttk.Entry(offline_frame, textvariable=self.qpsk_suffix_var, width=14
+                  ).grid(row=0, column=1, sticky=tk.W, padx=4, pady=(8, 4))
+        ttk.Label(offline_frame, text="留空则自动使用最新 QPSK RX 文件",
+                  style="DimCard.TLabel"
+                  ).grid(row=0, column=2, sticky=tk.W, padx=4, pady=(8, 4))
+
+        ttk.Label(offline_frame, text="STEP4 波形 ID 后六位：",
+                  style="Card.TLabel"
+                  ).grid(row=1, column=0, sticky=tk.W, padx=(8, 4), pady=4)
+        self.bpl_suffix_var = tk.StringVar(value="")
+        ttk.Entry(offline_frame, textvariable=self.bpl_suffix_var, width=14
+                  ).grid(row=1, column=1, sticky=tk.W, padx=4, pady=4)
+        ttk.Label(offline_frame, text="留空则自动使用最新 Bitloading RX 文件",
+                  style="DimCard.TLabel"
+                  ).grid(row=1, column=2, sticky=tk.W, padx=4, pady=4)
+
+        ttk.Label(offline_frame, text="完整 run-id / 文件名：",
+                  style="Card.TLabel"
+                  ).grid(row=2, column=0, sticky=tk.W, padx=(8, 4), pady=(0, 8))
+        self.full_run_id_var = tk.StringVar(value="")
+        ttk.Entry(offline_frame, textvariable=self.full_run_id_var, width=36
+                  ).grid(row=2, column=1, sticky=tk.W, padx=4, pady=(0, 8))
+        ttk.Label(offline_frame, text="粘贴完整编号/文件名可自动识别并去后缀",
+                  style="DimCard.TLabel"
+                  ).grid(row=2, column=2, sticky=tk.W, padx=4, pady=(0, 8))
+
+        self.full_run_id_var.trace_add("write", self._on_full_run_id_change)
+
         btn_bar = tk.Frame(opt, bg=COLOR_CARD)
-        btn_bar.grid(row=3, column=0, columnspan=5, sticky=tk.W,
-                     padx=12, pady=(0, 12))
+        btn_bar.grid(row=4, column=0, columnspan=5, sticky=tk.W,
+                     padx=12, pady=(0, 8))
         self.run_btn = ttk.Button(btn_bar, text="▶  开始测试",
                                   style="Accent.TButton",
                                   command=self.start_run)
@@ -1076,6 +1519,20 @@ class RunPanel(ttk.Frame):
         self.stop_btn.pack(side=tk.LEFT)
         self.run_status = ttk.Label(btn_bar, text="就绪", style="DimCard.TLabel")
         self.run_status.pack(side=tk.LEFT, padx=16)
+
+        # ── NN 进度条（训练/预测期间显示，不刷屏） ─────────────────
+        self.progress_frame = tk.Frame(opt, bg=COLOR_CARD)
+        self.progress_frame.grid(row=5, column=0, columnspan=5,
+                                 sticky=tk.W, padx=12, pady=(0, 10))
+        self.progress_frame.grid_remove()
+        self.progress_var = tk.DoubleVar(value=0.0)
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame, variable=self.progress_var,
+            maximum=100.0, length=220)
+        self.progress_bar.pack(side=tk.LEFT)
+        self.nn_status = ttk.Label(self.progress_frame, text="",
+                                   style="Card.TLabel")
+        self.nn_status.pack(side=tk.LEFT, padx=(10, 0))
 
         # ── 下方：左侧 config 参数面板 + 右侧运行日志 ───────────────
         paned = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
@@ -1109,6 +1566,8 @@ class RunPanel(ttk.Frame):
         self._append_log(
             "提示：选择运行模式与步骤后点击「开始测试」。\n"
             "在线模式需要连接 M8190A 与示波器；无硬件时建议使用虚拟信道模式。\n"
+            "离线/虚拟模式下可分别填写 STEP2 / STEP4 的波形 ID 后六位，\n"
+            "或粘贴完整 run-id / 文件名自动识别并去后缀。\n"
             "测试完成后会自动刷新数据并切换到最新实验。\n", "head")
 
     # ── 运行控制 ──────────────────────────────────────────────────
@@ -1122,7 +1581,46 @@ class RunPanel(ttk.Frame):
             cmd += [k, v]
         cmd += ["--use-nn", "1" if self.use_nn_var.get() else "0",
                 "--step", step]
+        # 离线/虚拟模式下追加定位参数
+        if mode in ("offline", "virtual"):
+            qpsk_suffix = self.qpsk_suffix_var.get().strip()
+            bpl_suffix = self.bpl_suffix_var.get().strip()
+            if qpsk_suffix and step in ("all", "step2"):
+                cmd += ["--run-suffix-qpsk", qpsk_suffix]
+            if bpl_suffix and step in ("all", "step4"):
+                cmd += ["--run-suffix-bpl", bpl_suffix]
         return cmd
+
+    def _on_full_run_id_change(self, *args):
+        """从完整 run-id 或文件名自动识别阶段、去后缀、填对应框."""
+        full = self.full_run_id_var.get().strip()
+        if not full:
+            return
+        # 去掉常见文件后缀
+        for ext in (".txt", ".json", ".npz", ".png", ".xlsx", ".mat"):
+            if full.lower().endswith(ext):
+                full = full[:-len(ext)]
+                break
+        # 提取最后一段作为 suffix
+        suffix = full.split("_")[-1] if "_" in full else full
+        if not suffix or len(suffix) < 4:
+            return
+        # 识别阶段前缀
+        upper = full.upper()
+        is_qpsk = "QPSK" in upper or "SNREST" in upper
+        is_bpl = "DMT" in upper and not is_qpsk
+        if is_qpsk:
+            if self.qpsk_suffix_var.get() != suffix:
+                self.qpsk_suffix_var.set(suffix)
+        elif is_bpl:
+            if self.bpl_suffix_var.get() != suffix:
+                self.bpl_suffix_var.set(suffix)
+        else:
+            # 无法识别阶段时，两个框都填（方便一键完整流程）
+            if self.qpsk_suffix_var.get() != suffix:
+                self.qpsk_suffix_var.set(suffix)
+            if self.bpl_suffix_var.get() != suffix:
+                self.bpl_suffix_var.set(suffix)
 
     def start_run(self):
         if self.proc is not None:
@@ -1154,6 +1652,38 @@ class RunPanel(ttk.Frame):
                     "向 AWG 下载波形，示波器可能采不到信号。\n\n仍要继续吗？"):
                 return
         cmd = self.build_command()
+
+        # 生成本次运行的 run_id；若离线模式下指定了 suffix，
+        # 优先使用源 RX 文件自身的 run_id，保持编号一致
+        run_id = generate_run_id()
+        step = self.step_combo.get().split()[0] or "all"
+        qpsk_suffix = self.qpsk_suffix_var.get().strip()
+        bpl_suffix = self.bpl_suffix_var.get().strip()
+        if self.mode_var.get() in ("offline", "virtual"):
+            if step == "step2" and qpsk_suffix:
+                src_run_id = _resolve_source_run_id("step2", qpsk_suffix)
+                if src_run_id:
+                    run_id = src_run_id
+            elif step == "step4" and bpl_suffix:
+                src_run_id = _resolve_source_run_id("step4", bpl_suffix)
+                if src_run_id:
+                    run_id = src_run_id
+            elif step == "all" and bpl_suffix:
+                # 完整流程以 bitloading 文件 run_id 为准
+                src_run_id = _resolve_source_run_id("step4", bpl_suffix)
+                if src_run_id:
+                    run_id = src_run_id
+        plot_save = self.config_panel.get_value("PLOT_SAVE")
+        if plot_save:
+            plot_dir = config.PLOT_DIR / run_id
+            if plot_dir.is_dir() and any(plot_dir.glob("*.png")):
+                if not messagebox.askyesno(
+                        "确认覆盖",
+                        f"目录 {plot_dir} 中已存在该 run-id 的图片。\n\n"
+                        f"是否覆盖？"):
+                    return
+        cmd += ["--run-id", run_id]
+
         mode_label = self.MODES[self.mode_var.get()][0]
         if self.mode_var.get() == "online":
             if not messagebox.askyesno(
@@ -1177,6 +1707,9 @@ class RunPanel(ttk.Frame):
         self.run_btn.configure(state=tk.DISABLED)
         self.stop_btn.configure(state=tk.NORMAL)
         self.run_status.configure(text="运行中…")
+        self.progress_var.set(0.0)
+        self.progress_frame.grid_remove()
+        self.nn_status.configure(text="")
         self.app.set_running(True)
         threading.Thread(target=self._reader, daemon=True).start()
         self.after(100, self._poll)
@@ -1193,6 +1726,10 @@ class RunPanel(ttk.Frame):
             while True:
                 kind, payload = self._queue.get_nowait()
                 if kind == "line":
+                    line = payload.rstrip("\n")
+                    if line.startswith("[NN_PROGRESS]"):
+                        self._update_nn_progress(line)
+                        continue
                     tag = "err" if ("Error" in payload or "Traceback"
                                     in payload) else None
                     self._append_log(payload, tag)
@@ -1203,6 +1740,35 @@ class RunPanel(ttk.Frame):
             pass
         if self.proc is not None:
             self.after(100, self._poll)
+
+    def _update_nn_progress(self, line):
+        """解析 NN 脚本输出的 [NN_PROGRESS] 标记，更新进度条（不写入日志）."""
+        try:
+            payload = json.loads(line.split("[NN_PROGRESS]", 1)[1].strip())
+        except Exception:
+            return
+        phase = payload.get("phase", "train")
+        if phase == "train":
+            epoch = payload.get("epoch", 0)
+            total = payload.get("total", 1) or 1
+            train_loss = payload.get("train_loss")
+            val_loss = payload.get("val_loss")
+            self.progress_var.set(min(100.0, epoch / total * 100.0))
+            parts = [f"NN 训练中… Epoch {epoch}/{total}"]
+            if train_loss is not None:
+                parts.append(f"train_loss={train_loss:.4f}")
+            if val_loss is not None:
+                parts.append(f"val_loss={val_loss:.4f}")
+            self.nn_status.configure(text="  ｜  ".join(parts))
+            self.progress_frame.grid()
+        elif phase == "predict":
+            self.progress_var.set(0.0)
+            self.nn_status.configure(text="NN 预测中…")
+            self.progress_frame.grid()
+        elif phase == "done":
+            self.progress_var.set(100.0)
+            self.nn_status.configure(text="NN 均衡完成")
+            self.progress_frame.grid()
 
     def _on_done(self, code):
         self.proc = None
@@ -1240,12 +1806,25 @@ class DmtGuiApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
+        # Windows 任务栏图标需要显式 AppUserModelID
+        _set_windows_taskbar_icon()
+
         # DPI 缩放
         dpi = self.winfo_fpixels("1i")
         self.font_scale = max(dpi / 96.0, 1.0)
         self.tk.call("tk", "scaling", dpi / 72.0)
 
-        self.title("DMT 通信系统实验平台")
+        self.title(f"{APP_EMOJI} DMT 通信系统实验平台")
+        self._icon, self._icon_ico = _create_emoji_icon(APP_EMOJI)
+        # Windows 优先使用 ico，避免任务栏羽毛；其它平台用 photo
+        if self._icon_ico is not None and sys.platform == "win32":
+            try:
+                self.iconbitmap(str(self._icon_ico))
+            except Exception:
+                if self._icon is not None:
+                    self.iconphoto(True, self._icon)
+        elif self._icon is not None:
+            self.iconphoto(True, self._icon)
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         w = min(int(sw * 0.82), int(1500 * self.font_scale))
         h = min(int(sh * 0.85), int(950 * self.font_scale))
@@ -1254,6 +1833,9 @@ class DmtGuiApp(tk.Tk):
         self.configure(bg=COLOR_BG)
 
         apply_styles(self, self.font_scale)
+
+        # 清理历史空图目录
+        _cleanup_empty_plot_dirs()
 
         self.runs = []
         self.records = []
@@ -1264,7 +1846,7 @@ class DmtGuiApp(tk.Tk):
         # ── 顶部标题栏 ─────────────────────────────────────────────
         header = tk.Frame(self, bg=COLOR_BG)
         header.pack(fill=tk.X, padx=16, pady=(14, 6))
-        ttk.Label(header, text="📡 DMT 通信系统实验平台",
+        ttk.Label(header, text=f"{APP_EMOJI} DMT 通信系统实验平台",
                   style="Title.TLabel").pack(side=tk.LEFT)
         self.pill_runs = ttk.Label(header, style="Pill.TLabel")
         self.pill_runs.pack(side=tk.RIGHT, padx=(8, 0))
@@ -1329,22 +1911,29 @@ class DmtGuiApp(tk.Tk):
     # ── 数据 ──────────────────────────────────────────────────────
 
     def reload_data(self, select_latest=False):
-        self.runs = list_runs()
         self.records = list_records()
         self._record_by_run = {r.get("run_id"): r for r in self.records}
+        # 下拉框从 records 去重后按时间倒序显示，确保单步运行也能看到
+        seen = set()
+        self.runs = []
+        for rec in reversed(self.records):
+            run_id = rec.get("run_id", "")
+            if run_id and run_id not in seen:
+                seen.add(run_id)
+                self.runs.append(run_id)
         self.run_combo["values"] = self.runs
         self.pill_runs.configure(text=f"{len(self.runs)} 次实验")
         self.pill_records.configure(text=f"{len(self.records)} 条记录")
         if not self.runs:
             self.status_var.set(
-                f"未找到实验数据（{ASSETS_DIR}）。请先在「运行测试」页完成一次测试。")
+                f"未找到实验数据（{RECORDS_DIR}）。请先在「运行测试」页完成一次测试。")
             return
         latest = self.runs[0]
         if select_latest or self.current_run not in self.runs:
             self.select_run(latest)
         else:
             self.select_run(self.current_run)
-        self.status_var.set(f"数据目录：{ASSETS_DIR}")
+        self.status_var.set(f"数据目录：{ASSETS_DIR}；记录目录：{RECORDS_DIR}")
 
     def select_run(self, run_id, source=None):
         if not run_id:

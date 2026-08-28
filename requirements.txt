@@ -5,6 +5,8 @@ PyVISA>=1.12.0
 PyVISA-py>=0.7.0
 tqdm>=4.62.0
 matplotlib-inline>=0.1.0  # 用于在 Spyder/Jupyter 中显示图像
+openpyxl>=3.0.0  # 导出图表数据为 Excel
+Pillow>=8.0.0  # 把 emoji 渲染为窗口图标
 
 # torch 建议根据 CUDA 版本安装：
 # CPU 版本:  pip install torch --index-url https://download.pytorch.org/whl/cpu

@@ -19,6 +19,7 @@ data/*.png
 data/*.txt
 data/*.mat
 data/*.json
+data/*.ico
 data/nn/*.txt
 data/nn/*.png
 data/nn/*.pth

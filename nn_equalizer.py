@@ -10,6 +10,7 @@ import subprocess
 import sys
 import shutil
 import os
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -61,10 +62,10 @@ class NNEqualizer:
         env["MPLBACKEND"] = "Agg"  # 避免 plt.show() 阻塞
         env["DISABLE_TQDM"] = "1"  # 关闭 NN 训练进度条
 
-        # 子进程运行 NN 脚本
+        # 子进程运行 NN 脚本（实时流式输出，便于 GUI 即时显示进度）
         cmd = [self.python_exe, str(self.script)]
         print(f"Running NN equalizer: {' '.join(cmd)}")
-        result = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             cwd=str(self.nn_dir),
             env=env,
@@ -72,14 +73,24 @@ class NNEqualizer:
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            bufsize=1,
         )
-        try:
-            print(result.stdout)
-        except UnicodeEncodeError:
-            print(result.stdout.encode("utf-8", errors="replace").decode("gbk", errors="replace"))
-        if result.returncode != 0:
-            raise RuntimeError(f"NN script failed with return code {result.returncode}")
+
+        def _stream():
+            for line in proc.stdout:
+                try:
+                    print(line, end="")
+                except UnicodeEncodeError:
+                    print(line.encode("utf-8", errors="replace")
+                          .decode("gbk", errors="replace"), end="")
+
+        reader = threading.Thread(target=_stream, daemon=True)
+        reader.start()
+        code = proc.wait()
+        reader.join(timeout=2)
+        if code != 0:
+            raise RuntimeError(f"NN script failed with return code {code}")
 
         output_file = self.nn_dir / output_name
         if not output_file.exists():

@@ -43,6 +43,15 @@ from virtual_channel import VirtualChannel
 from record import generate_run_id, save_record
 
 
+def _run_id_from_rx_path(path: Path) -> str:
+    """从 rawOSC_<stage>_<run_id>.txt 文件名提取完整 run_id."""
+    stem = path.stem
+    parts = stem.split("_")
+    if len(parts) >= 3:
+        return "_".join(parts[-3:])
+    return stem
+
+
 def _resolve_offline_rx_file(pattern: str, run_suffix: str = None) -> Path:
     """离线模式下定位 RX 文件.
 
@@ -118,6 +127,7 @@ def get_cfg():
         "carrierno1": config.CARRIERNO1,
         "normalize_flag": config.NORMALIZE_FLAG,
         "pre_equ_flag": config.PRE_EQU_FLAG,
+        "ratio": config.RATIO,
         "awg_sample_rate": config.AWG_SAMPLE_RATE,
         "pilot_pattern": config.PILOT_PATTERN,
         "pilot_value": config.PILOT_VALUE,
@@ -462,10 +472,18 @@ def step4_receive_bitloading(tx_dict: dict,
 
     # 解调
     res = dmt_receiver(rx_sync, tx_dict, cfg=get_cfg())
-    mean_snr = np.nanmean(res["SNR_R"])
-    print(f"Estimated BER = {res['ber']:.6e}")
-    print(f"Estimated SER = {res['ser']:.6e}")
-    print(f"Mean recovered SNR (linear) = {mean_snr:.4f}")
+
+    # 平均 SNR 只对 RQ>0 的有效数据子载波计算；RQ=0 空子载波不参与统计。
+    snr_arr = np.asarray(res["SNR_R"], dtype=float)
+    active = np.asarray(res["bits_per_carrier"]) > 0
+    valid_snr = active & np.isfinite(snr_arr) & (snr_arr > 0)
+    mean_snr = float(np.mean(snr_arr[valid_snr])) if np.any(valid_snr) else np.nan
+
+    print(f"Measured BER = {res['ber']:.6e}")
+    print(f"Measured SER = {res['ser']:.6e}")
+    print(f"Mean recovered SNR (linear, active carriers only) = {mean_snr:.4f}")
+    if np.isfinite(mean_snr) and mean_snr > 0:
+        print(f"Mean recovered SNR (dB, active carriers only) = {10 * np.log10(mean_snr):.2f} dB")
 
     # 保存结果
     save_txt(config.DATA_DIR / "SNR_R_recovered.txt", res["SNR_R"])
@@ -514,16 +532,32 @@ def run_full_pipeline(offline: bool = False,
                       use_virtual_channel: bool = False,
                       qpsk_rx_file: Path = None,
                       bpl_rx_file: Path = None,
-                      run_suffix: str = None):
+                      run_suffix: str = None,
+                      qpsk_suffix: str = None,
+                      bpl_suffix: str = None,
+                      run_id: str = None):
     """运行完整 DMT 流程."""
     # 初始化计数器与本次测试唯一编号
     if not config.COUNT_FILE.exists():
         save_txt(config.COUNT_FILE, np.array([0]), fmt="%d")
-    run_id = generate_run_id()
-    plot_dir = None
-    if config.PLOT_SAVE:
-        plot_dir = config.PLOT_DIR / run_id
-        plot_dir.mkdir(parents=True, exist_ok=True)
+    # 兼容旧版 --run-suffix
+    qpsk_suffix = qpsk_suffix or run_suffix
+    bpl_suffix = bpl_suffix or run_suffix
+    # 离线模式下若指定 suffix，使用源波形文件自身的 run_id
+    if offline:
+        if qpsk_suffix:
+            qpsk_rx_file = qpsk_rx_file or _resolve_offline_rx_file(
+                "rawOSC_QPSK_SNRest_*.txt", run_suffix=qpsk_suffix)
+        if bpl_suffix:
+            bpl_rx_file = bpl_rx_file or _resolve_offline_rx_file(
+                "rawOSC_DMT_*.txt", run_suffix=bpl_suffix)
+        if bpl_suffix:
+            run_id = _run_id_from_rx_path(bpl_rx_file)
+        elif qpsk_suffix:
+            run_id = _run_id_from_rx_path(qpsk_rx_file)
+    if run_id is None:
+        run_id = generate_run_id()
+    plot_dir = config.PLOT_DIR / run_id if config.PLOT_SAVE else None
     mode_str = "OFFLINE" if offline else "ONLINE"
     print(f"\n========== DMT Pipeline [{mode_str}] ==========")
     print(f">>> Run ID: {run_id}")
@@ -595,6 +629,33 @@ def run_full_pipeline(offline: bool = False,
     return res
 
 
+def _save_step_record(run_id: str,
+                      step: str,
+                      offline: bool,
+                      use_awg: bool,
+                      use_nn: bool,
+                      use_virtual_channel: bool,
+                      **extra):
+    """单步运行时保存简要记录，便于 GUI 后续查看."""
+    record = {
+        "step": step,
+        "offline": bool(offline),
+        "use_awg": bool(use_awg),
+        "use_nn": bool(use_nn),
+        "use_virtual_channel": bool(use_virtual_channel),
+        "pilot_pattern": config.PILOT_PATTERN,
+        "virtual_channel_fc": config.VIRTUAL_CHANNEL_FC,
+        "virtual_channel_snr_db": config.VIRTUAL_CHANNEL_SNR_DB,
+        "virtual_channel_nonlinearity": config.VIRTUAL_CHANNEL_NONLINEARITY,
+        "virtual_channel_delay": config.VIRTUAL_CHANNEL_DELAY,
+        "virtual_channel_attenuation": config.VIRTUAL_CHANNEL_ATTENUATION,
+        "ratio": config.RATIO,
+    }
+    record.update(extra)
+    json_path = save_record(run_id, record)
+    print(f"Saved step record to {json_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="DMT Python Pipeline")
     parser.add_argument("--offline", type=int, default=config.OFFLINE_FLAG,
@@ -613,9 +674,15 @@ def main():
     parser.add_argument("--run-suffix", type=str, default=None,
                         help="Last 6 characters of run_id to locate offline RX files "
                              "(e.g. dee786). Auto-matches both QPSK and bitloading stages.")
+    parser.add_argument("--run-suffix-qpsk", type=str, default=None,
+                        help="Last 6 characters of QPSK RX run_id")
+    parser.add_argument("--run-suffix-bpl", type=str, default=None,
+                        help="Last 6 characters of bitloading RX run_id")
     parser.add_argument("--step", type=str, default="all",
                         choices=["all", "step1", "step2", "step3", "step4"],
                         help="Run specific step or full pipeline")
+    parser.add_argument("--run-id", type=str, default=None,
+                        help="指定本次测试的 run_id（GUI 用于覆盖确认）")
     args = parser.parse_args()
 
     offline = bool(args.offline)
@@ -624,20 +691,35 @@ def main():
     use_virtual_channel = bool(args.use_virtual_channel)
     qpsk_rx = Path(args.qpsk_rx) if args.qpsk_rx else None
     bpl_rx = Path(args.bpl_rx) if args.bpl_rx else None
-    run_suffix = args.run_suffix
+    qpsk_suffix = args.run_suffix_qpsk or args.run_suffix
+    bpl_suffix = args.run_suffix_bpl or args.run_suffix
 
     if not config.COUNT_FILE.exists():
         save_txt(config.COUNT_FILE, np.array([0]), fmt="%d")
 
-    # 单步运行时不生成整套记录，只画图
-    run_id = generate_run_id()
-    plot_dir = None
-    if config.PLOT_SAVE:
-        plot_dir = config.PLOT_DIR / run_id
-        plot_dir.mkdir(parents=True, exist_ok=True)
+    # 单步运行时同样保存简要记录，便于 GUI 查看
+    run_id = args.run_id if args.run_id else generate_run_id()
+
+    # 离线模式下若指定 suffix，使用源波形文件自身的 run_id，保持编号一致
+    if offline:
+        if args.step in ("all", "step2") and qpsk_suffix:
+            qpsk_rx = qpsk_rx or _resolve_offline_rx_file(
+                "rawOSC_QPSK_SNRest_*.txt", run_suffix=qpsk_suffix)
+            if args.step == "step2":
+                run_id = _run_id_from_rx_path(qpsk_rx)
+                qpsk_suffix = None
+        if args.step in ("all", "step4") and bpl_suffix:
+            bpl_rx = bpl_rx or _resolve_offline_rx_file(
+                "rawOSC_DMT_*.txt", run_suffix=bpl_suffix)
+            if args.step == "step4":
+                run_id = _run_id_from_rx_path(bpl_rx)
+                bpl_suffix = None
+
+    plot_dir = config.PLOT_DIR / run_id if config.PLOT_SAVE else None
 
     mode_str = "OFFLINE" if offline else "ONLINE"
     print(f"\n========== DMT Pipeline [{mode_str}] ==========")
+    print(f">>> Run ID: {run_id}")
 
     if args.step == "all":
         run_full_pipeline(offline=offline,
@@ -646,38 +728,60 @@ def main():
                           use_virtual_channel=use_virtual_channel,
                           qpsk_rx_file=qpsk_rx,
                           bpl_rx_file=bpl_rx,
-                          run_suffix=run_suffix)
+                          qpsk_suffix=qpsk_suffix,
+                          bpl_suffix=bpl_suffix,
+                          run_id=run_id)
     elif args.step == "step1":
         step1_generate_qpsk_tx(use_awg=use_awg, plot_dir=plot_dir, run_id=run_id)
+        _save_step_record(run_id, "step1", offline, use_awg, use_nn,
+                          use_virtual_channel)
     elif args.step == "step2":
         tx_qpsk = generate_qpsk_tx(datano=config.DATANO_QPSK, cfg=get_cfg())
-        step2_receive_qpsk(tx_qpsk,
-                           offline=offline,
-                           rx_file=qpsk_rx,
-                           use_virtual_channel=use_virtual_channel,
-                           plot_dir=plot_dir,
-                           run_id=run_id,
-                           run_suffix=run_suffix)
+        snrs, _ = step2_receive_qpsk(tx_qpsk,
+                                     offline=offline,
+                                     rx_file=qpsk_rx,
+                                     use_virtual_channel=use_virtual_channel,
+                                     plot_dir=plot_dir,
+                                     run_id=run_id,
+                                     run_suffix=qpsk_suffix)
+        mean_snr = float(np.nanmean(snrs)) if snrs is not None else np.nan
+        mean_snr_db = float(10 * np.log10(mean_snr)) if mean_snr > 0 else np.nan
+        _save_step_record(run_id, "step2", offline, use_awg, use_nn,
+                          use_virtual_channel,
+                          mean_snr_db=mean_snr_db)
     elif args.step == "step3":
         snrs = load_txt(config.FINAL_SNR_QPSK)
-        step3_generate_bitloading_tx(snrs,
-                                     constellation=config.CONSTELLATION_QAM,
-                                     use_awg=use_awg,
-                                     plot_dir=plot_dir,
-                                     run_id=run_id)
+        tx_bpl = step3_generate_bitloading_tx(snrs,
+                                              constellation=config.CONSTELLATION_QAM,
+                                              use_awg=use_awg,
+                                              plot_dir=plot_dir,
+                                              run_id=run_id)
+        _save_step_record(run_id, "step3", offline, use_awg, use_nn,
+                          use_virtual_channel,
+                          estimated_rate_gbps=float(tx_bpl.get("datarate_gbps", 0.0)),
+                          ratio=int(tx_bpl.get("ratio", config.RATIO)))
     elif args.step == "step4":
         tx_bpl = generate_bitloading_tx(load_txt(config.FINAL_SNR_QPSK),
                                         constellation=config.CONSTELLATION_QAM,
                                         datano=config.DATANO_BPL,
                                         cfg=get_cfg())
-        step4_receive_bitloading(tx_bpl,
-                                 offline=offline,
-                                 rx_file=bpl_rx,
-                                 use_nn=use_nn,
-                                 use_virtual_channel=use_virtual_channel,
-                                 plot_dir=plot_dir,
-                                 run_id=run_id,
-                                 run_suffix=run_suffix)
+        res = step4_receive_bitloading(tx_bpl,
+                                       offline=offline,
+                                       rx_file=bpl_rx,
+                                       use_nn=use_nn,
+                                       use_virtual_channel=use_virtual_channel,
+                                       plot_dir=plot_dir,
+                                       run_id=run_id,
+                                       run_suffix=bpl_suffix)
+        mean_recovered_snr = np.nanmean(res["SNR_R"])
+        _save_step_record(run_id, "step4", offline, use_awg, use_nn,
+                          use_virtual_channel,
+                          estimated_rate_gbps=float(tx_bpl.get("datarate_gbps", 0.0)),
+                          final_rate_gbps=float(tx_bpl.get("datarate_gbps", 0.0)),
+                          final_ber=float(res["ber"]),
+                          final_ser=float(res["ser"]),
+                          mean_recovered_snr_db=float(10 * np.log10(mean_recovered_snr)),
+                          ratio=int(tx_bpl.get("ratio", config.RATIO)))
 
 
 if __name__ == "__main__":

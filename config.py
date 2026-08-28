@@ -29,6 +29,7 @@ UPSAMPLENO = 2                     # 上采样倍数
 DATANO_QPSK = 100                  # QPSK 信道探测时符号数
 DATANO_BPL = 200                   # bitloading 传输时符号数
 TRAININGNO = 20                    # 用于信道估计的 training symbol 数
+RATIO = 130                         # bitloading 中 raise_num 的减数，影响谱效率
 CP_RATIO = 1 / 32                  # 循环前缀比例
 
 # 常用导出常量（由上面计算得到）
@@ -39,7 +40,7 @@ EFF_CARNO = (CARRIERNO - ZEROPAD1 * 2) // 2
 # -----------------------------------------------------------------------------
 # 调制/归一化参数
 # -----------------------------------------------------------------------------
-NORMALIZE_FLAG = 1                 # 1=平均功率归一化, 0=最大幅值归一化
+NORMALIZE_FLAG = 0                 # 1=平均功率归一化, 0=最大幅值归一化
 CONSTELLATION_APSK = "APSK"
 CONSTELLATION_QAM = "QAM"
 
@@ -69,7 +70,7 @@ PRE_EQU_FLAG = 3
 # PRE_METHOD: 0=normal fit; 1=inverse+normal; 2=cut off; 3=peak point;
 #             4=peak point fit; 5=Hardware Pre (Bridge-T 均衡器响应)
 # -----------------------------------------------------------------------------
-PRE_METHOD = 5
+PRE_METHOD = 4
 PRE_EQUAL_DB = 20                  # 截止/分段门限 (dB)
 PRE_EQUAL_DB2 = 20                 # 第二门限 (仅 method=4 诊断用)
 
@@ -84,9 +85,9 @@ HW_PRE_R0 = 50                     # 参考阻抗 (Ohm)
 # -----------------------------------------------------------------------------
 # 采样率/硬件参数
 # -----------------------------------------------------------------------------
-AWG_SAMPLE_RATE = 8e9              # AWG 采样率 (Hz)
+AWG_SAMPLE_RATE = 3.0e9              # AWG 采样率 (Hz)
 OSC_SAMPLE_RATE = 10e9             # 示波器采样率 (Hz)
-AWG_VPP = 0.8                      # AWG 输出幅度 (Vpp)
+AWG_VPP = 0.4                      # AWG 输出幅度 (Vpp)
 
 # -----------------------------------------------------------------------------
 # 运行模式
@@ -96,7 +97,7 @@ OFFLINE_FLAG = 1                   # 1=离线处理已有 scope 文件, 0=在线
 # -----------------------------------------------------------------------------
 # 虚拟信道（用于无仪器时的调试/维护）
 # -----------------------------------------------------------------------------
-USE_VIRTUAL_CHANNEL = 1          # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
+USE_VIRTUAL_CHANNEL = 0          # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
 VIRTUAL_CHANNEL_FC = 0.8e9         # 一阶低通截止频率 (Hz)，模拟发射端高频衰减
 VIRTUAL_CHANNEL_SNR_DB = 20        # 接收机信噪比 (dB)，数值越高噪声越小
 VIRTUAL_CHANNEL_NONLINEARITY = 0.02  # 接收机三阶非线性系数
@@ -124,7 +125,7 @@ M8190A_PORT = 5025
 #   "DC"  - DC 耦合放大输出（默认，基带/DMT 常用）
 #   "AC"  - AC 耦合放大输出（隔直，射频/IF 常用）
 #   "DAC" - 直接 DAC 输出（未经放大，幅度最小）
-AWG_OUTPUT_ROUTE = "DC"
+AWG_OUTPUT_ROUTE = "DAC"
 
 # 示波器连接方式（与 MATLAB 一致，默认 TCPIP 端口 5025）：
 #   TCPIP Socket:  "TCPIP0::192.168.1.10::5025::SOCKET"
@@ -132,7 +133,7 @@ AWG_OUTPUT_ROUTE = "DC"
 # 留空则自动查找第一个 USB 仪器
 # SC_VISA_ADDR = "USB1::0x2A8D::0x9008::MY50400106::0::INSTR"
 # 改为（网口，VXI-11 协议）
-OSC_VISA_ADDR = "TCPIP0::192.168.1.83::5025::SOCKET"
+OSC_VISA_ADDR = "TCPIP0::192.168.193.176::5025::SOCKET"
 OSC_CHANNEL = "CHAN1"              # MATLAB oscrunQPSK.m / oscrunDMT.m 均使用 CHAN2
 OSC_TIMEBASE_SCALE = 80e-6         # QPSK 探测时基 (s/div)，DMT bitloading 用 60e-6
 
@@ -192,10 +193,10 @@ NN_MODEL_TEMP = NN_DIR / "trained_model_temp.pth"
 # 绘图与后均衡选项
 # -----------------------------------------------------------------------------
 PLOT_SHOW = True                   # 是否在 Spyder 中 plt.show() 显示图像
-PLOT_SAVE = False                  # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
+PLOT_SAVE = True                   # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
 PLOT_DPI = 300                     # 默认图像分辨率（Spyder 显示与保存共用）
 
-POSTEQ_FLAG = 3                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
+POSTEQ_FLAG = 1                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
 USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
 
 

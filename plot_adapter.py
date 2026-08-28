@@ -7,6 +7,7 @@
     data/      : 每张图的 *.npz 数据
     scripts/   : 每张图的 *.py 脚本（可用 codeplot_v5.py 打开编辑）
 """
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -39,18 +40,26 @@ def _write_script(script_dir: Path, name: str, code: str):
     (script_dir / f"{name}.py").write_text(code, encoding="utf-8")
 
 
-def _display(script_code: str, script_path: Path):
-    """在 Spyder 中显示图像（脚本里使用外部 fig 变量）."""
-    fig = plt.figure(dpi=config.PLOT_DPI)
+def _render_figure(script_code: str, script_path: Path, dpi: int = None):
+    """执行脚本并返回 Figure 对象."""
+    if dpi is None:
+        dpi = config.PLOT_DPI
+    fig = plt.figure(dpi=dpi)
     ns = {"fig": fig, "np": np, "plt": plt, "Path": Path,
           "__file__": str(script_path)}
     exec(script_code, ns)
+    return fig
+
+
+def _display(script_code: str, script_path: Path):
+    """在 Spyder 中显示图像（脚本里使用外部 fig 变量）."""
+    _render_figure(script_code, script_path)
     plt.show()
 
 
 def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Template,
                       script_vars: dict):
-    """通用：保存数据、写脚本、显示."""
+    """通用：保存数据、写脚本、保存图片/元数据、显示."""
     base, data_dir, script_dir = _prepare_dirs(run_id)
     _save_data(data_dir, name, **arrays)
     script_vars = dict(script_vars)
@@ -58,7 +67,33 @@ def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Tem
     script_code = script_template.substitute(script_vars)
     script_path = script_dir / f"{name}.py"
     _write_script(script_dir, name, script_code)
-    _display(script_code, script_path)
+
+    # 渲染一次，用于保存和/或显示
+    fig = _render_figure(script_code, script_path)
+
+    # 保存 PNG 图片与元数据到 data/plots/<run_id>/
+    if config.PLOT_SAVE:
+        plot_dir = config.PLOT_DIR / run_id
+        plot_dir.mkdir(parents=True, exist_ok=True)
+        png_path = plot_dir / f"{name}.png"
+        json_path = plot_dir / f"{name}.json"
+        fig.savefig(png_path, dpi=config.PLOT_DPI, bbox_inches="tight")
+        metadata = {
+            "run_id": run_id,
+            "name": name,
+            "title": script_vars.get("title", name),
+            "arrays": list(arrays.keys()),
+            "script_path": str(script_path),
+            "data_path": str(data_dir / f"{name}.npz"),
+        }
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+    if config.PLOT_SHOW:
+        plt.show()
+    else:
+        plt.close(fig)
+
     return script_path
 
 
