@@ -13,6 +13,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
+import json
+
+
+def _nn_progress(epoch=None, total=None, train_loss=None, val_loss=None,
+                 phase="train"):
+    """输出结构化进度标记，供 GUI 解析并更新进度条（不刷屏）.
+
+    仅在 DISABLE_TQDM=1 时输出，避免命令行独立运行时多出一倍信息。
+    """
+    if os.environ.get("DISABLE_TQDM", "0") != "1":
+        return
+    payload = {"phase": phase}
+    if epoch is not None:
+        payload["epoch"] = int(epoch)
+    if total is not None:
+        payload["total"] = int(total)
+    if train_loss is not None:
+        payload["train_loss"] = float(train_loss)
+    if val_loss is not None:
+        payload["val_loss"] = float(val_loss)
+    print(f"[NN_PROGRESS] {json.dumps(payload, ensure_ascii=False)}",
+          flush=True)
 
 # 自定义数据处理函数
 def ANN_data_transfer(x, taps):
@@ -188,6 +210,10 @@ def main():
         # 更新学习率
         scheduler.step(val_loss)
 
+        # 向 GUI 汇报当前 epoch 进度（仅一次/epoch，不刷屏）
+        _nn_progress(epoch=epoch + 1, total=config['epochs'],
+                     train_loss=train_loss, val_loss=val_loss, phase="train")
+
         # 实时更新损失曲线
         plt.clf()
         plt.plot(train_losses, 'r-', label='Train Loss')
@@ -272,14 +298,16 @@ def main():
     torch.cuda.empty_cache()  # 必须加
    # data_Tx, data_Rx = load_and_process_data()
     # 开始预测
+    _nn_progress(phase="predict")
     predictions = predict(
         model=model,
-        raw_data=data_Rx, 
+        raw_data=data_Rx,
         feature_num=config['feature_num'],
         time_step=config['time_step'],
         device=device,        # 保持GPU/CPU都可以
         batch_size=128        # 和训练一样的批次
     )
+    _nn_progress(phase="done")
 
     # 保存预测结果
     np.savetxt('Rxdata_afterNN1.txt', predictions, fmt='%.6f')
