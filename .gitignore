@@ -35,6 +35,8 @@ data/nn/*.pth
 data/plots/
 data/records/
 data/codeplot_assets/
+data/grid_scans/
+log/
 
 # 编辑器/调试产生的临时文件
 *.bak

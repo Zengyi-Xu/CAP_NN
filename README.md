@@ -1,83 +1,89 @@
-# DMT 通信系统 Python 重写
+# DMT Communication System — Python Rewrite
 
-本项目将原始 MATLAB DMT 通信代码重写为 Python，保留完整通信流程，并支持通过 pyvisa 直接控制 M8190A AWG 与 Keysight 示波器（USB-B）。
+**Version: 0.2.0** (see [CHANGELOG.md](CHANGELOG.md) for release notes)
 
-新增功能：
-- 多种导频图案（training_only / comb / mesh）
-- 内置虚拟信道（一阶低通、AWGN、三阶非线性、延迟）
-- NN 后均衡（默认关闭，可手动启用）
-- 自动绘图并在 Spyder 中显示
-- 同时生成 CodePlot v5 可编辑脚本 + NPZ 数据，便于后续精修图
-- 每次测试自动生成唯一编号并保存传输记录
+This project rewrites the original MATLAB DMT communication code in Python, preserving the full communication flow and supporting direct control of the M8190A AWG and Keysight oscilloscope (USB-B) via pyvisa.
 
-## 项目结构
+New features:
+- Multiple pilot patterns (training_only / comb / mesh)
+- Built-in virtual channel (first-order low-pass, AWGN, third-order nonlinearity, delay)
+- NN post-equalizer (disabled by default, can be enabled manually)
+- Automatic plotting with display in Spyder
+- Generates both CodePlot v5 editable scripts + NPZ data for later figure refinement
+- Each test automatically generates a unique ID and saves a transmission record
+- Keithley 2400 source-meter control over RS-232 / USB-to-RS232
+- Automated 2-D parameter grid scan (Keithley bias vs AWG Vpp) with CSV summary and CodePlot contour plots
+
+## Project Structure
 
 ```
 dmt_python/
-├── config.py              # DMT / 硬件 / 绘图 / NN 参数
-├── dmt_core.py            # DMT 调制、解调、bitloading、SNR/BER/SER 估计
-├── awg_m8190a.py          # M8190A pyvisa 控制
-├── oscilloscope.py        # 示波器 USB-B pyvisa 读取
-├── nn_equalizer.py        # ZY_BiGRU_GPU 包装器
-├── record.py              # 传输记录与唯一编号
-├── plot_adapter.py        # 生成 CodePlot v5 脚本与 NPZ 数据
-├── codeplot_v5.py         # CodePlot v5 图集排版工具
-├── main.py                # 完整流程入口
-├── utils.py               # 文件 I/O、同步、重采样、绘图
-├── virtual_channel.py     # 虚拟信道仿真
+├── config.py                   # DMT / hardware / plotting / NN / Keithley / grid-scan parameters
+├── dmt_core.py                 # DMT modulation, demodulation, bitloading, SNR/BER/SER estimation
+├── awg_m8190a.py               # M8190A pyvisa control
+├── oscilloscope.py             # Oscilloscope USB-B pyvisa readout
+├── nn_equalizer.py             # ZY_BiGRU_GPU wrapper
+├── record.py                   # Transmission records and unique ID
+├── plot_adapter.py             # Generate CodePlot v5 scripts and NPZ data
+├── codeplot_v5.py              # CodePlot v5 figure layout tool
+├── main.py                     # Full flow entry point
+├── utils.py                    # File I/O, synchronization, resampling, plotting
+├── virtual_channel.py          # Virtual channel simulation
+├── keithley2400_controller.py  # Keithley 2400 RS-232/USB driver
+├── grid_scan.py                # Automated bias vs Vpp grid scan engine
 ├── requirements.txt
-├── data/                  # 数据文件
+├── data/                  # Data files
 │   ├── txdata/
 │   ├── rxdata/
-│   ├── codeplot_assets/   # 每次测试的 CodePlot 脚本与数据（按 run_id 分目录）
-│   ├── records/           # 每次测试的 JSON/txt 记录
-│   └── nn/                # NN 脚本与模型
+│   ├── codeplot_assets/   # CodePlot scripts and data per test (organized by run_id)
+│   ├── records/           # JSON/txt record per test
+│   └── nn/                # NN scripts and models
 └── README.md
 ```
 
-## 安装依赖
+## Install Dependencies
 
-建议使用虚拟环境：
+A virtual environment is recommended:
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate.bat   # Windows cmd
-# 或 .venv\Scripts\Activate.ps1  # Windows PowerShell
-# 或 source .venv/Scripts/activate  # Git Bash
+# or .venv\Scripts\Activate.ps1  # Windows PowerShell
+# or source .venv/Scripts/activate  # Git Bash
 
-pip install numpy scipy matplotlib pyvisa PyVISA-py tqdm
+pip install numpy scipy matplotlib pyvisa PyVISA-py tqdm pyserial
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
-Windows 下如果 `torch` 安装报错 "File name extension too long"，请启用长路径支持（组策略 `Computer Configuration > Administrative Templates > System > Filesystem > Enable Win32 long paths`），或使用更短的项目路径。
+If `torch` installation on Windows reports "File name extension too long", enable long path support (Group Policy `Computer Configuration > Administrative Templates > System > Filesystem > Enable Win32 long paths`), or use a shorter project path.
 
-若使用 Keysight VISA，建议同时安装 Keysight IO Libraries Suite，并确认 USB-B 驱动已安装；否则 `PyVISA-py` 已可驱动 USBTMC。
+If using Keysight VISA, install Keysight IO Libraries Suite and confirm the USB-B driver is installed; otherwise `PyVISA-py` can drive USBTMC directly.
 
-## 快速开始
+## Quick Start
 
-### 1. 离线运行完整流程（不连接硬件，默认不调用 NN）
+### 1. Run the full flow offline (no hardware, NN not called by default)
 
 ```bash
 python main.py --offline 1 --use-awg 0
 ```
 
-默认不调用 NN，以缩短运行时间。需要启用 NN 后均衡时：
+NN is not called by default to reduce runtime. To enable NN post-equalization:
 
 ```bash
 python main.py --offline 1 --use-awg 0 --use-nn 1
 ```
 
-离线模式默认读取 `data/rxdata/` 下已有的示波器文件；当 `--use-virtual-channel 1` 时直接用虚拟信道生成 RX。
+In offline mode the tool reads existing oscilloscope files under `data/rxdata/` by default; when `--use-virtual-channel 1` is set, the virtual channel generates RX directly.
 
-#### 通过后缀定位离线波形
+#### Locate offline waveforms by suffix
 
-在线采集的波形现在会以 `rawOSC_QPSK_SNRest_<run_id>.txt` 和 `rawOSC_DMT_<run_id>.txt` 保存（`run_id` 形如 `20260806_013459_dee786`）。离线 rerun 时，只需输入最后 6 位即可自动定位同一组实验的两个阶段：
+Online-acquired waveforms are now saved as `rawOSC_QPSK_SNRest_<run_id>.txt` and `rawOSC_DMT_<run_id>.txt` (`run_id` looks like `20260806_013459_dee786`). For offline rerun, enter only the last 6 characters to automatically locate both stages of the same experiment:
 
 ```bash
 python main.py --offline 1 --use-awg 0 --run-suffix dee786
 ```
 
-这等价于同时指定：
+This is equivalent to specifying both paths:
 
 ```bash
 python main.py --offline 1 --use-awg 0 \
@@ -85,88 +91,88 @@ python main.py --offline 1 --use-awg 0 \
   --bpl-rx  data/rxdata/rawOSC_DMT_20260806_013459_dee786.txt
 ```
 
-如果只想重新处理某一阶段，也可以配合 `--step`：
+To reprocess only one stage, combine with `--step`:
 
 ```bash
 python main.py --offline 1 --step step2 --run-suffix dee786
 python main.py --offline 1 --step step4 --run-suffix dee786
 ```
 
-> 提示：`--run-suffix` 与 `--qpsk-rx` / `--bpl-rx` 同时存在时，显式路径优先。
+> Tip: When both `--run-suffix` and `--qpsk-rx` / `--bpl-rx` are present, explicit paths take precedence.
 
-### 2. 在线运行（连接 M8190A + 示波器）
+### 2. Online run (M8190A + oscilloscope connected)
 
-修改 `config.py` 中的 VISA 地址：
+Edit the VISA addresses in `config.py`:
 
 ```python
-M8190A_VISA_ADDR = "TCPIP0::192.168.1.10::5025::SOCKET"  # 改成 M8190A 实际 IP
-OSC_VISA_ADDR = ""   # 留空自动查找第一个 USB 仪器
+M8190A_VISA_ADDR = "TCPIP0::192.168.1.10::5025::SOCKET"  # change to M8190A actual IP
+OSC_VISA_ADDR = ""   # leave empty to auto-detect the first USB instrument
 ```
 
-然后运行：
+Then run:
 
 ```bash
 python main.py --offline 0 --use-awg 1
 ```
 
-如需在线模式下启用 NN，再加 `--use-nn 1`。
+Add `--use-nn 1` to enable NN in online mode.
 
-### 3. 单步运行
+### 3. Single-step run
 
 ```bash
-python main.py --step step1  # 只生成 QPSK TX
-python main.py --step step2  # 只接收 QPSK 并估计 SNR
-python main.py --step step3  # 只生成 Bitloading TX
-python main.py --step step4  # 只接收 Bitloading 并解调
+python main.py --step step1  # generate QPSK TX only
+python main.py --step step2  # receive QPSK only and estimate SNR
+python main.py --step step3  # generate Bitloading TX only
+python main.py --step step4  # receive Bitloading only and demodulate
 ```
 
-### 4. 使用虚拟信道（无仪器调试）
+### 4. Use the virtual channel (instrument-free debugging)
 
-在 `config.py` 中设置：
+Set in `config.py`:
 
 ```python
 USE_VIRTUAL_CHANNEL = 1
-VIRTUAL_CHANNEL_FC = 2.0e9          # 一阶低通截止频率
-VIRTUAL_CHANNEL_SNR_DB = 30         # 接收机 SNR
-VIRTUAL_CHANNEL_NONLINEARITY = 0.02 # 三阶非线性系数
-VIRTUAL_CHANNEL_DELAY = 5           # 样点延迟
-VIRTUAL_CHANNEL_ATTENUATION = 0.9   # 线性衰减
+VIRTUAL_CHANNEL_FC = 2.0e9          # first-order low-pass cutoff frequency
+VIRTUAL_CHANNEL_SNR_DB = 30         # receiver SNR
+VIRTUAL_CHANNEL_NONLINEARITY = 0.02 # third-order nonlinearity coefficient
+VIRTUAL_CHANNEL_DELAY = 5           # sample delay
+VIRTUAL_CHANNEL_ATTENUATION = 0.9   # linear attenuation
 ```
 
-然后运行：
+Then run:
 
 ```bash
 python main.py --offline 1 --use-virtual-channel 1 --use-awg 0
 ```
 
-虚拟信道会替代示波器读取，直接由 TX 生成 RX，便于无硬件时调试与维护。
+The virtual channel replaces oscilloscope readout and generates RX directly from TX, which is convenient for debugging and maintenance without hardware.
 
-### 5. 切换导频图案
+### 5. Switch pilot patterns
 
-在 `config.py` 中设置：
+Set in `config.py`:
 
 ```python
 PILOT_PATTERN = "comb"   # "training_only" / "comb" / "mesh"
-PILOT_COMB_SPACING = 8   # 梳状导频子载波间隔
+PILOT_COMB_SPACING = 8   # comb pilot subcarrier spacing
 PILOT_MESH_FREQ_SPACING = 8
 PILOT_MESH_TIME_SPACING = 5
 ```
 
-- `training_only`：仅使用前几列 training symbol（与原 MATLAB 一致），所有子载波都传数据。
-- `comb`：固定若干子载波全部传已知导频，适合快速时变信道；bitloading 时会自动把这些导频子载波的比特数置 0。
-- `mesh`：时频二维稀疏导频，开销更小；插值精度受导频密度影响，建议先用虚拟信道验证后再上硬件。
+- `training_only`: uses only the first few training-symbol columns (same as the original MATLAB); all subcarriers carry data.
+- `comb`: fixes certain subcarriers to carry known pilots for the entire duration, suitable for fast time-varying channels; during bitloading the bit count of these pilot subcarriers is automatically set to 0.
+- `mesh`: time-frequency 2D sparse pilots with lower overhead; interpolation accuracy depends on pilot density. Verify with the virtual channel before moving to hardware.
 
-> 提示：comb 的 SNR 估计会跳过纯导频子载波，并用最近邻数据子载波的 SNR 填充；`mean SNR` 已改用 `nanmean` 避免导频位置把均值撑大。
+> Tip: comb SNR estimation skips pure pilot subcarriers and fills with the SNR of the nearest data subcarrier; `mean SNR` now uses `nanmean` to avoid pilot positions inflating the average.
 
-## 自动绘图与 CodePlot v5 脚本
+## Auto Plotting and CodePlot v5 Scripts
 
-默认情况下，图像会在 **Spyder 的 Plots 窗口** 中直接显示（通过 `plt.show()`）。
+By default, figures are displayed directly in the **Spyder Plots pane** (via `plt.show()`).
 
-同时，每次测试都会在 `data/codeplot_assets/<run_id>/` 下保存：
+At the same time, every test saves under `data/codeplot_assets/<run_id>/`:
 
 ```
 data/codeplot_assets/<run_id>/
-├── data/                # 每张图的 *.npz 数据
+├── data/                # *.npz data for each figure
 │   ├── SNRest_QPSK_time.npz
 │   ├── SNRest_QPSK_spec.npz
 │   ├── SNRest_QPSK_constellation.npz
@@ -181,159 +187,218 @@ data/codeplot_assets/<run_id>/
 │   ├── ser_ber_per_carrier.npz
 │   ├── constellation_density.npz
 │   └── constellation_by_order.npz
-└── scripts/             # 每张图的可编辑 Python 脚本
+└── scripts/             # editable Python script for each figure
     ├── SNRest_QPSK_time.py
     ├── SNRest_QPSK_spec.py
     ...
     └── constellation_by_order.py
 ```
 
-要事后编辑某张图，打开 `codeplot_v5.py`，点击 **📂 加载脚本**，选择对应的 `scripts/<name>.py` 即可。脚本内使用 `fig` 变量，CodePlot v5 会自动把数据按相对路径从 `../data/<name>.npz` 加载进来。
+To edit a figure later, open `codeplot_v5.py`, click **📂 Load Script**, and select the corresponding `scripts/<name>.py`. The script uses the `fig` variable, and CodePlot v5 automatically loads data from `../data/<name>.npz` via relative paths.
 
-### 当前绘制的图
+### Currently Generated Figures
 
-| 名称 | 说明 |
-|------|------|
-| `SNRest_QPSK_time` / `SNRest_QPSK_spec` / `SNRest_QPSK_constellation` | QPSK TX 时域 / 频域 / 星座图 |
-| `SNRest_QPSK_rx_spec` | QPSK RX 频谱 |
-| `SNRest_QPSK_nonlinearity` | TX-RX 幅值非线性散点/密度图（蓝绿色 `GnBu`） |
-| `SNR_QPSK` | QPSK 阶段估计的每载波 SNR（单位 dB） |
-| `bit_power_loading` | 每子载波 SNR、bit loading、power loading，并标注 ratio |
-| `DMT_bitloading_Tx_time` / `DMT_bitloading_Tx_spec` | Bitloading TX 时域 / 频谱 |
-| `DMT_bitloading_Rx_spec` / `DMT_bitloading_nonlinearity` | Bitloading RX 频谱 / 非线性 |
-| `SNR_compare` | QPSK 估计 SNR vs 最终恢复 SNR（单位 dB） |
-| `constellation_density` | 按调制阶数分类的星座点密度热力图（蓝绿色 `GnBu`） |
-| `constellation_by_order` | 按调制阶数分类的 RX 星座散点图（每阶数一张子图） |
-| `ser_ber_per_carrier` | 每个子载波的 SER 与 BER |
+| Name | Description |
+|------|-------------|
+| `SNRest_QPSK_time` / `SNRest_QPSK_spec` / `SNRest_QPSK_constellation` | QPSK TX time / frequency / constellation |
+| `SNRest_QPSK_rx_spec` | QPSK RX spectrum |
+| `SNRest_QPSK_nonlinearity` | TX-RX amplitude nonlinearity scatter/density (blue-green `GnBu`) |
+| `SNR_QPSK` | Per-carrier SNR estimated in the QPSK stage (dB) |
+| `bit_power_loading` | Per-subcarrier SNR, bit loading, power loading, with ratio annotated |
+| `DMT_bitloading_Tx_time` / `DMT_bitloading_Tx_spec` | Bitloading TX time / spectrum |
+| `DMT_bitloading_Rx_spec` / `DMT_bitloading_nonlinearity` | Bitloading RX spectrum / nonlinearity |
+| `SNR_compare` | QPSK-estimated SNR vs final recovered SNR (dB) |
+| `constellation_density` | Constellation point density heatmap by modulation order (blue-green `GnBu`) |
+| `constellation_by_order` | RX constellation scatter by modulation order (one subplot per order) |
+| `ser_ber_per_carrier` | Per-subcarrier SER and BER |
 
-> 注意：spectrogram（时频谱图）已移除，因为显示效果不佳。
+> Note: The spectrogram (time-frequency plot) has been removed because the rendering quality was poor.
 
-> **Spyder 中看不到图的排查：**
-> 1. 确认 Spyder 环境已安装 `matplotlib-inline`（`pip install matplotlib-inline`）。
-> 2. 在 Spyder 菜单中选择 **Tools > Preferences > IPython console > Graphics**，把 **Backend** 设为 **Inline**。
-> 3. 重启 IPython Console 后再运行 `main.py`。
+> **Troubleshooting missing plots in Spyder:**
+> 1. Confirm `matplotlib-inline` is installed in the Spyder environment (`pip install matplotlib-inline`).
+> 2. In Spyder choose **Tools > Preferences > IPython console > Graphics** and set **Backend** to **Inline**.
+> 3. Restart the IPython Console and run `main.py`.
 
-在纯命令行/无显示环境中运行时，可设置：
+For pure command-line / headless environments, set:
 
 ```bash
 set MPLBACKEND=Agg   # Windows cmd
-# 或
+# or
 $env:MPLBACKEND="Agg" # PowerShell
-# 或
+# or
 export MPLBACKEND=Agg # Git Bash
 ```
 
-或直接在 `config.py` 中关闭显示：
+Or disable display directly in `config.py`:
 
 ```python
 PLOT_SHOW = False
 ```
 
-## 实验数据可视化 GUI
+## Experimental Data Visualization GUI
 
-`dmt_gui.py` 提供一个桌面 GUI，用于浏览每次实验保存的数据并直接运行测试（无需额外依赖，tkinter + matplotlib，已适配高 DPI 屏幕）：
+`dmt_gui.py` provides a desktop GUI for browsing saved experiment data and running tests directly (no extra dependencies: tkinter + matplotlib, with high-DPI support):
 
 ```bash
 .venv\Scripts\python dmt_gui.py
 ```
 
-包含四个子页面：
+It contains six tabs:
 
-| 子页面 | 内容 |
-|--------|------|
-| 波形时频域 | QPSK 探测与 DMT Bitloading 的 TX/RX 时域波形、频谱 |
-| DMT 符号调制 | Bit/Power Loading、QPSK 星座图、按调制阶数分类的 RX 星座图与密度热力图 |
-| 传输实验结果 | 历次实验记录表（速率/BER/SER/SNR）、SNR 对比、每子载波 SER/BER、TX-RX 非线性、历次实验趋势 |
-| 运行测试 | 选择模式（在线 / 离线 / 虚拟信道）与步骤后直接调用 `main.py`，日志实时显示，完成自动刷新 |
+| Tab | Content |
+|-----|---------|
+| Waveform Time/Frequency | TX/RX time waveforms and spectra for QPSK probing and DMT Bitloading |
+| DMT Symbol Modulation | Bit/Power Loading, QPSK constellation, RX constellation by modulation order, density heatmap |
+| Transmission Results | Experiment record table (rate/BER/SER/SNR), SNR comparison, per-subcarrier SER/BER, TX-RX nonlinearity, experiment trends |
+| Run Test | Select mode (online / offline / virtual channel) and step, then call `main.py` directly; log is shown live and view refreshes on completion |
+| Keithley 2400 | Connect and control a Keithley 2400 source meter over RS-232 or USB-to-RS232 |
+| Grid Scan | Automated 2-D sweep of Keithley bias vs AWG Vpp with CSV summary and contour plots |
 
-### 浏览实验数据
+### Browse Experiment Data
 
-- 顶部通过 `run_id` 下拉框切换实验；在“传输实验结果”页点击记录表的行也可切换。
-- 数据来自 `data/codeplot_assets/<run_id>/data/*.npz` 与 `data/records/record_*.json`。
-- 运行新实验后点“刷新数据”即可更新下拉框和图表。
+- Switch experiments via the `run_id` dropdown at the top; in the "Transmission Results" tab you can also click a row in the record table.
+- Data comes from `data/codeplot_assets/<run_id>/data/*.npz` and `data/records/record_*.json`.
+- After running a new experiment, click "Refresh Data" to update the dropdown and plots.
 
-### 导出图片
+### Export Images
 
-每个图表页面左侧提供：
+Each plot tab provides on the left:
 
-- **导出当前图片**：把当前显示的图片保存为 PNG / PDF / SVG，默认目录 `data/plots/<run_id>/`。
-- **保存全部图片**：一键保存当前子页面下所有图到 `data/plots/<run_id>/`。
+- **Export Current Image**: save the currently displayed figure as PNG / PDF / SVG; default directory `data/plots/<run_id>/`.
+- **Save All Images**: one-click save of all figures in the current tab to `data/plots/<run_id>/`.
 
-保存时会同时生成同名 `.json` 文件，记录该图用到的数组名、形状、dtype 以及原始 `.npz` 数据路径。若目标目录已存在同名图片，会弹窗确认是否覆盖。
+When saving, a same-name `.json` file is generated recording the array names, shapes, dtypes used in the figure, and the original `.npz` data path. If the target directory already contains a same-name image, a confirmation dialog is shown.
 
-### 导出图表数据
+### Export Plot Data
 
-每个图表页面左侧还提供：
+Each plot tab also provides:
 
-- **导出当前图表数据**：把当前图的 `.npz` 数据导出为 `.xlsx`，不同数组放在不同 sheet。
-- **导出全部图表数据**：一键导出当前子页面下所有图的数据到单个 `.xlsx`。
+- **Export Current Plot Data**: export the current figure's `.npz` data as `.xlsx`, with different arrays in different sheets.
+- **Export All Plot Data**: one-click export of all figure data in the current tab to a single `.xlsx`.
 
-支持复数数组拆分为 real/imag 两列，兼容 0 维标量、1D/2D 数组。
+Complex arrays are split into real/imag columns; 0-D scalars, 1D, and 2D arrays are supported.
 
-### 运行测试
+### Run Tests
 
-在“运行测试”页：
+In the "Run Test" tab:
 
-1. 选择运行模式：在线 / 离线 / 离线 + 虚拟信道。
-2. 选择流程步骤：完整流程（all）或单步（step1 ~ step4）。
-3. （可选）启用 NN 后均衡。
-4. 离线/虚拟模式下，可填写：
-   - **STEP2 波形 ID 后六位**：定位 QPSK 探测 RX 文件
-   - **STEP4 波形 ID 后六位**：定位 Bitloading RX 文件
-   - **完整 run-id / 文件名**：自动识别阶段并去掉 `.txt` / `.json` 等后缀
-5. 在下方参数面板修改 `config.py` 参数（如 `RATIO`、`PLOT_SAVE` 等），修改后点击“保存到 config.py”。
-6. 点击“开始测试”即可调用 `main.py`，日志实时显示在右侧。
+1. Choose run mode: online / offline / offline + virtual channel.
+2. Choose flow step: full flow (all) or single step (step1 ~ step4).
+3. (Optional) Enable NN post-equalization.
+4. In offline / virtual-channel mode, you can fill in:
+   - **Last six digits of STEP2 waveform ID**: locate the QPSK probing RX file
+   - **Last six digits of STEP4 waveform ID**: locate the Bitloading RX file
+   - **Full run-id / filename**: automatically recognize the stage and strip `.txt` / `.json` suffixes
+5. Modify `config.py` parameters (e.g. `RATIO`, `PLOT_SAVE`) in the parameter panel below, then click "Save to config.py".
+6. Click "Start Test" to call `main.py`; the log is shown live on the right.
 
-> 提示：离线运行时若指定了波形后缀，GUI 会自动使用源 RX 文件自身的 `run_id`，保证生成的记录、图片目录与源波形编号一致。
+> Tip: When running offline with a waveform suffix specified, the GUI automatically uses the `run_id` from the source RX file so that generated records and image directories match the original waveform ID.
 
-### 常见问题
+### Keithley 2400 Control
 
-- **bit/power loading 导出时报 `tuple index out of range`**：当前版本已修复。若仍遇到，请完全关闭 GUI、删除 `__pycache__` 后重新启动；导出失败时弹窗会显示完整 Traceback，可贴出来进一步排查。
-- **任务栏仍是羽毛图标**：Windows 图标缓存可能导致更新延迟，可尝试删除 `data/.gui_icon.ico` 和 `data/.gui_icon.png` 后重启 GUI，或注销/重启系统。
+The "⚡ Keithley 2400" tab controls a Keithley 2400 SourceMeter through a COM port. The port can be a physical RS-232 port or a USB-to-RS232 adapter (FTDI / Prolific / CH340 / CP210x).
 
-## 传输记录
+1. Select the COM port and baud rate, then click **Connect**.
+2. Choose **Source Mode**: `voltage` (V source, current measure) or `current` (current source, voltage measure).
+3. Set **Level** (V or A), **Compliance** limit, and **NPLC** integration time.
+4. Click **Apply Settings**, then **Output ON**.
+5. Click **Measure** to read voltage, current, resistance, and time.
+6. The output is automatically turned off when the GUI closes.
 
-每次完整测试都会自动生成唯一编号 `run_id`（形如 `20260731_024911_164ad1`），并在 `data/records/` 下保存：
+Defaults are defined in `config.py`:
 
-- `record_<run_id>.json`：完整参数与结果（导频、虚拟信道、速率、BER、SER、SNR、ratio、NN 等）
-- `record_<run_id>.txt`：文本摘要
+```python
+K2400_PORT = "COM1"
+K2400_BAUDRATE = 9600
+K2400_SOURCE_MODE = "voltage"
+K2400_LEVEL = 0.0
+K2400_COMPLIANCE = 0.1
+K2400_NPLC = 1.0
+```
 
-记录内容包括：
-- 测试编号与时间戳
-- 导频图案、是否使用虚拟信道/NN
-- 虚拟信道参数（fc、SNR、非线性、延迟、衰减）
-- 信道探测估算速率（estimated rate）
-- 最终 bitloading 速率（final rate）
-- 最终 BER / SER
-- 恢复 SNR（dB）
+### Grid Scan (Bias vs Vpp)
+
+The "🔲 Grid Scan" tab automates 2-D parameter sweeps:
+
+- **Parameter 1**: Keithley-controlled bias (voltage or current).
+- **Parameter 2**: AWG output amplitude `Vpp`.
+
+For each grid point the DMT pipeline is executed and the final measurement step is repeated N times and averaged. Results are saved under `data/grid_scans/<scan_id>/`:
+
+```
+data/grid_scans/<scan_id>/
+├── config.json
+├── summary.csv
+├── contour_ber.png
+├── contour_ser.png
+├── contour_snr.png
+└── codeplot_assets/
+    ├── data/
+    └── scripts/          # CodePlot v5 loadable contour scripts
+```
+
+Usage:
+
+1. Set the Keithley bias range (start / stop / step) and source mode.
+2. Set the AWG Vpp range.
+3. Choose pipeline mode:
+   - `step1-4`: full DMT-NN flow; Step 4 is repeated and averaged.
+   - `step1-2`: QPSK probing only; Step 2 is repeated and averaged.
+4. Set **Repeats** for the final measurement step.
+5. Select **Offline / Virtual channel / Use NN** as needed.
+6. Click **Start Grid Scan**.
+7. After completion, select a scan ID in the right panel to view the CSV summary table and the contour plot (BER / SER / SNR).
+
+> Note: In offline mode, repeated measurements use the same resolved RX file unless multiple matching files exist. For meaningful averaging, supply distinct RX files or run online where each repeat captures fresh scope data.
+
+### FAQ
+
+- **`tuple index out of range` when exporting bit/power loading**: fixed in the current version. If it still occurs, fully close the GUI, delete `__pycache__`, and restart; the export failure dialog shows the full traceback, which can be pasted for further diagnosis.
+- **Taskbar still shows the feather icon**: Windows icon cache may delay updates. Try deleting `data/.gui_icon.ico` and `data/.gui_icon.png` and restarting the GUI, or log out / restart the system.
+
+## Transmission Records
+
+Every full test automatically generates a unique ID `run_id` (like `20260731_024911_164ad1`) and saves in `data/records/`:
+
+- `record_<run_id>.json`: full parameters and results (pilots, virtual channel, rate, BER, SER, SNR, ratio, NN, etc.)
+- `record_<run_id>.txt`: text summary
+
+Record contents include:
+- Test ID and timestamp
+- Pilot pattern, whether virtual channel / NN was used
+- Virtual channel parameters (fc, SNR, nonlinearity, delay, attenuation)
+- Channel-probing estimated rate
+- Final bitloading rate
+- Final BER / SER
+- Recovered SNR (dB)
 - ratio
 
-## 关键参数
+## Key Parameters
 
-在 `config.py` 中调整：
+Adjust in `config.py`:
 
-| 参数 | 含义 |
-|------|------|
-| `CARRIERNO` | 子载波总数 (1056) |
-| `ZEROPAD1` | 每侧零填充 (16) |
-| `UPSAMPLENO` | 上采样倍数 (2) |
-| `DATANO_QPSK` | QPSK 符号数 (100) |
-| `DATANO_BPL` | Bitloading 符号数 (200) |
-| `AWG_SAMPLE_RATE` | AWG 采样率 8 GSa/s |
-| `OSC_SAMPLE_RATE` | 示波器采样率 10 GSa/s |
-| `M8190A_VISA_ADDR` | AWG VISA 地址 |
-| `OSC_VISA_ADDR` | 示波器 USB VISA 地址 |
-| `POSTEQ_FLAG` | 后均衡类型：0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra；非 0 时 main.py 默认调用 NN |
-| `USE_NN` | 由 `POSTEQ_FLAG` 自动决定，是否默认调用 NN 后均衡 |
-| `PLOT_SHOW` / `PLOT_SAVE` | 是否显示 / 保存图像 |
+| Parameter | Meaning |
+|-----------|---------|
+| `CARRIERNO` | Total number of subcarriers (1056) |
+| `ZEROPAD1` | Zero padding on each side (16) |
+| `UPSAMPLENO` | Upsampling factor (2) |
+| `DATANO_QPSK` | Number of QPSK symbols (100) |
+| `DATANO_BPL` | Number of Bitloading symbols (200) |
+| `AWG_SAMPLE_RATE` | AWG sample rate 8 GSa/s |
+| `OSC_SAMPLE_RATE` | Oscilloscope sample rate 10 GSa/s |
+| `M8190A_VISA_ADDR` | AWG VISA address |
+| `OSC_VISA_ADDR` | Oscilloscope USB VISA address |
+| `POSTEQ_FLAG` | Post-equalization type: 0=no NN, 1=RNN/GRU, 2=MLP, 3=Volterra; when non-zero main.py calls NN by default |
+| `USE_NN` | Automatically determined by `POSTEQ_FLAG`; whether to call NN post-equalization by default |
+| `PLOT_SHOW` / `PLOT_SAVE` | Whether to show / save figures |
 
 
-## 注意事项
+## Notes
 
-1. 示波器 USB-B 连接时，请确保 Keysight IO Libraries Suite 已识别到设备，且资源字符串以 `USB0::` 开头。
-2. M8190A 通过 TCPIP socket 连接时，请确认防火墙放行 5025 端口。
-3. 默认不启用 NN，以加快运行速度；需要后均衡时加 `--use-nn 1`，第一次运行会训练 8 个 epoch。
-4. 若 `PyVISA` 找不到资源，可在 Python 中先测试：
+1. When connecting the oscilloscope via USB-B, ensure Keysight IO Libraries Suite has recognized the device and the resource string starts with `USB0::`.
+2. When connecting the M8190A via TCPIP socket, confirm the firewall allows port 5025.
+3. NN is disabled by default to speed up execution; add `--use-nn 1` when post-equalization is needed. The first run trains for 8 epochs.
+4. If `PyVISA` cannot find resources, test in Python first:
 
 ```python
 import pyvisa

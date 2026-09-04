@@ -1,11 +1,11 @@
-"""DMT 通信系统配置参数.
+"""DMT communication system configuration parameters.
 
-参数尽量与原始 MATLAB 代码 (STEP1/STEP2/STEP3/STEP4) 保持一致。
+Parameters are kept consistent with the original MATLAB code (STEP1/STEP2/STEP3/STEP4).
 """
 from pathlib import Path
 
 # -----------------------------------------------------------------------------
-# 项目路径
+# Project paths
 # -----------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -13,7 +13,7 @@ TXDATA_DIR = DATA_DIR / "txdata"
 RXDATA_DIR = DATA_DIR / "rxdata"
 NN_DIR = DATA_DIR / "nn"
 
-# 新增：绘图与记录目录
+# New: plotting and record directories
 PLOT_DIR = DATA_DIR / "plots"
 RECORD_DIR = DATA_DIR / "records"
 
@@ -21,94 +21,94 @@ for _d in (DATA_DIR, TXDATA_DIR, RXDATA_DIR, NN_DIR, PLOT_DIR, RECORD_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------------------------------------------------------
-# DMT 信号参数
+# DMT signal parameters
 # -----------------------------------------------------------------------------
-CARRIERNO = 1056    # 子载波总数 (1056)
-ZEROPAD1 = 16    # 每侧零填充数 (16)
-UPSAMPLENO = 2                     # 上采样倍数
-DATANO_QPSK = 100                  # QPSK 信道探测时符号数
-DATANO_BPL = 200                   # bitloading 传输时符号数
-TRAININGNO = 20                    # 用于信道估计的 training symbol 数
-RATIO = 130                         # bitloading 中 raise_num 的减数，影响谱效率
-CP_RATIO = 1 / 32                  # 循环前缀比例
+CARRIERNO = 1056    # Total number of subcarriers (1056)
+ZEROPAD1 = 16    # Number of zero-padding subcarriers on each side (16)
+UPSAMPLENO = 2                     # Upsampling factor
+DATANO_QPSK = 100                  # Number of symbols for QPSK channel probing
+DATANO_BPL = 200                   # Number of symbols for bitloading transmission
+TRAININGNO = 20                    # Number of training symbols for channel estimation
+RATIO = 130                         # Subtrahend for raise_num in bitloading, affecting spectral efficiency
+CP_RATIO = 1 / 32                  # Cyclic prefix ratio
 
-# 常用导出常量（由上面计算得到）
-CARRIERNO1 = CARRIERNO // 2 - ZEROPAD1   # 有效子载波数 (512)
-CP = int(CP_RATIO * CARRIERNO)           # CP 长度 (33)
+# Commonly derived constants (computed from above)
+CARRIERNO1 = CARRIERNO // 2 - ZEROPAD1   # Number of valid subcarriers (512)
+CP = int(CP_RATIO * CARRIERNO)           # CP length (33)
 EFF_CARNO = (CARRIERNO - ZEROPAD1 * 2) // 2
 
 # -----------------------------------------------------------------------------
-# 调制/归一化参数
+# Modulation/normalization parameters
 # -----------------------------------------------------------------------------
-NORMALIZE_FLAG = 0                 # 1=平均功率归一化, 0=最大幅值归一化
+NORMALIZE_FLAG = 0                 # 1=average power normalization, 0=peak amplitude normalization
 CONSTELLATION_APSK = "APSK"
 CONSTELLATION_QAM = "QAM"
 
 # -----------------------------------------------------------------------------
-# 导频图案选项
+# Pilot pattern options
 # -----------------------------------------------------------------------------
-# "training_only": 仅使用前几列 training symbol 做信道估计（与原 MATLAB 一致）
-# "comb":          梳状导频，固定若干子载波全部传已知导频
-# "mesh":          网状导频，在时频二维网格上插入导频
+# "training_only": use only the first few training symbols for channel estimation (consistent with original MATLAB)
+# "comb":          comb pilots: fixed subcarriers all carry known pilots
+# "mesh":          mesh pilots: insert pilots on a 2D time-frequency grid
 PILOT_PATTERN = "training_only"
-PILOT_VALUE = 1.0 + 0.0j             # 导频符号值
-PILOT_COMB_START = 4                 # 梳状导频起始子载波
-PILOT_COMB_SPACING = 8               # 梳状导频子载波间隔
-PILOT_MESH_START_FREQ = 4            # 网状导频起始子载波
-PILOT_MESH_FREQ_SPACING = 8          # 网状导频频率间隔
-PILOT_MESH_START_TIME = 2            # 网状导频起始符号
-PILOT_MESH_TIME_SPACING = 5          # 网状导频时间间隔
+PILOT_VALUE = 1.0 + 0.0j             # Pilot symbol value
+PILOT_COMB_START = 4                 # Comb pilot starting subcarrier
+PILOT_COMB_SPACING = 8               # Comb pilot subcarrier spacing
+PILOT_MESH_START_FREQ = 4            # Mesh pilot starting subcarrier
+PILOT_MESH_FREQ_SPACING = 8          # Mesh pilot frequency spacing
+PILOT_MESH_START_TIME = 2            # Mesh pilot starting symbol
+PILOT_MESH_TIME_SPACING = 5          # Mesh pilot time spacing
 
 # -----------------------------------------------------------------------------
-# 预均衡选项 (与 MATLAB pre_equ_flag 对应)
+# Pre-equalization options (corresponds to MATLAB pre_equ_flag)
 # 0=no Pre; 1=Symbol Pre; 2=Wave NN Pre; 3=Wave Hardware Pre; 4=Wave NN+Hardware Pre
 # -----------------------------------------------------------------------------
 PRE_EQU_FLAG = 3
 
 # -----------------------------------------------------------------------------
-# 预均衡权重生成 (与 MATLAB Pre.m 对应, 生成 th7.txt)
+# Pre-emphasis weight generation (port from MATLAB Pre.m, outputs th7.txt)
 # PRE_METHOD: 0=normal fit; 1=inverse+normal; 2=cut off; 3=peak point;
-#             4=peak point fit; 5=Hardware Pre (Bridge-T 均衡器响应)
+#             4=peak point fit; 5=Hardware Pre (Bridge-T equalizer response)
 # -----------------------------------------------------------------------------
 PRE_METHOD = 4
-PRE_EQUAL_DB = 20                  # 截止/分段门限 (dB)
-PRE_EQUAL_DB2 = 20                 # 第二门限 (仅 method=4 诊断用)
+PRE_EQUAL_DB = 20                  # Cutoff/segmentation threshold (dB)
+PRE_EQUAL_DB2 = 20                 # Second threshold (diagnostic only for method=4)
 
-# Hardware Pre (method=5) 桥T均衡器参数, 与 Pre.m case 5 一致
-HW_PRE_FBEGIN = 1                  # 起始频点索引 (MHz)
-HW_PRE_ADB = 5                     # 最大衰减 (dB)
-HW_PRE_FCEN_MHZ = 600              # 中心频率 (MHz), <1000
-HW_PRE_FHALF_MHZ = 400             # 半衰减带宽 (MHz), <1000
-HW_PRE_FEND = 600                  # 结束频点 (MHz, 相对 FBEGIN)
-HW_PRE_R0 = 50                     # 参考阻抗 (Ohm)
-
-# -----------------------------------------------------------------------------
-# 采样率/硬件参数
-# -----------------------------------------------------------------------------
-AWG_SAMPLE_RATE = 3.0e9              # AWG 采样率 (Hz)
-OSC_SAMPLE_RATE = 10e9             # 示波器采样率 (Hz)
-AWG_VPP = 0.4                      # AWG 输出幅度 (Vpp)
+# Hardware Pre (method=5) Bridge-T equalizer parameters, consistent with Pre.m case 5
+HW_PRE_FBEGIN = 1                  # Starting frequency index (MHz)
+HW_PRE_ADB = 5                     # Maximum attenuation (dB)
+HW_PRE_FCEN_MHZ = 600              # Center frequency (MHz), <1000
+HW_PRE_FHALF_MHZ = 400             # Half-attenuation bandwidth (MHz), <1000
+HW_PRE_FEND = 600                  # End frequency (MHz, relative to FBEGIN)
+HW_PRE_R0 = 50                     # Reference impedance (Ohm)
 
 # -----------------------------------------------------------------------------
-# 运行模式
+# Sample rates / hardware parameters
 # -----------------------------------------------------------------------------
-OFFLINE_FLAG = 1                   # 1=离线处理已有 scope 文件, 0=在线连接示波器
+AWG_SAMPLE_RATE = 3.0e9              # AWG sample rate (Hz)
+OSC_SAMPLE_RATE = 10e9             # Oscilloscope sample rate (Hz)
+AWG_VPP = 0.4                      # AWG output amplitude (Vpp)
 
 # -----------------------------------------------------------------------------
-# 虚拟信道（用于无仪器时的调试/维护）
+# Run mode
 # -----------------------------------------------------------------------------
-USE_VIRTUAL_CHANNEL = 0          # 1=离线模式时使用虚拟信道生成 RX，0=读取已有文件
-VIRTUAL_CHANNEL_FC = 0.8e9         # 一阶低通截止频率 (Hz)，模拟发射端高频衰减
-VIRTUAL_CHANNEL_SNR_DB = 20        # 接收机信噪比 (dB)，数值越高噪声越小
-VIRTUAL_CHANNEL_NONLINEARITY = 0.02  # 接收机三阶非线性系数
-VIRTUAL_CHANNEL_DELAY = 5          # 整数样点延迟（建议 <= CP）
-VIRTUAL_CHANNEL_ATTENUATION = 0.9  # 线性幅度衰减
+OFFLINE_FLAG = 1                   # 1=offline processing of existing scope files, 0=online connection to scope
 
 # -----------------------------------------------------------------------------
-# 硬件 VISA 地址
+# Virtual channel (for debugging/maintenance without instruments)
 # -----------------------------------------------------------------------------
-# M8190A VISA 地址（根据实际情况四选一，把 localhost 换成 AWG 实际 IP）：
-#   TCPIP Socket（最常用，无需额外 VISA backend）:
+USE_VIRTUAL_CHANNEL = 0          # 1=offline mode uses virtual channel to generate RX, 0=read existing files
+VIRTUAL_CHANNEL_FC = 0.8e9         # First-order low-pass cutoff frequency (Hz), simulating TX high-frequency roll-off
+VIRTUAL_CHANNEL_SNR_DB = 20        # Receiver SNR (dB); higher value means less noise
+VIRTUAL_CHANNEL_NONLINEARITY = 0.02  # Receiver third-order nonlinearity coefficient
+VIRTUAL_CHANNEL_DELAY = 5          # Integer sample delay (recommended <= CP)
+VIRTUAL_CHANNEL_ATTENUATION = 0.9  # Linear amplitude attenuation
+
+# -----------------------------------------------------------------------------
+# Hardware VISA addresses
+# -----------------------------------------------------------------------------
+# M8190A VISA address (choose one according to actual setup; replace localhost with AWG IP):
+#   TCPIP Socket (most common, no extra VISA backend needed):
 #     "TCPIP0::192.168.1.10::5025::SOCKET"
 #   HiSLIP:
 #     "TCPIP0::192.168.1.10::hislip0::INSTR"
@@ -121,24 +121,24 @@ M8190A_VISA_ADDR = "TCPIP0::localhost::5025::SOCKET"
 #M8190A_VISA_ADDR = "USB-PXI0::5564::4708::6&26821990&0&1-1::INSTR "
 M8190A_PORT = 5025
     
-# M8190A 输出路径选择：
-#   "DC"  - DC 耦合放大输出（默认，基带/DMT 常用）
-#   "AC"  - AC 耦合放大输出（隔直，射频/IF 常用）
-#   "DAC" - 直接 DAC 输出（未经放大，幅度最小）
+# M8190A output route selection:
+#   "DC"  - DC-coupled amplified output (default, common for baseband/DMT)
+#   "AC"  - AC-coupled amplified output (DC-blocked, common for RF/IF)
+#   "DAC" - Direct DAC output (unamplified, smallest amplitude)
 AWG_OUTPUT_ROUTE = "DAC"
 
-# 示波器连接方式（与 MATLAB 一致，默认 TCPIP 端口 5025）：
+# Oscilloscope connection (consistent with MATLAB, default TCPIP port 5025):
 #   TCPIP Socket:  "TCPIP0::192.168.1.10::5025::SOCKET"
 #   USB-B/USBTMC:  "USB0::0x0957::0x17A6::MY12345678::INSTR"
-# 留空则自动查找第一个 USB 仪器
+# Leave empty to auto-detect the first USB instrument
 # SC_VISA_ADDR = "USB1::0x2A8D::0x9008::MY50400106::0::INSTR"
-# 改为（网口，VXI-11 协议）
+# Use network port (VXI-11 protocol)
 OSC_VISA_ADDR = "TCPIP0::192.168.193.176::5025::SOCKET"
-OSC_CHANNEL = "CHAN1"              # MATLAB oscrunQPSK.m / oscrunDMT.m 均使用 CHAN2
-OSC_TIMEBASE_SCALE = 80e-6         # QPSK 探测时基 (s/div)，DMT bitloading 用 60e-6
+OSC_CHANNEL = "CHAN1"              # MATLAB oscrunQPSK.m / oscrunDMT.m both use CHAN2
+OSC_TIMEBASE_SCALE = 80e-6         # Timebase for QPSK probing (s/div); DMT bitloading uses 60e-6
 
 # -----------------------------------------------------------------------------
-# 文件路径
+# File paths
 # -----------------------------------------------------------------------------
 SNR_TABLE_APSK1 = DATA_DIR / "SNRtable_APSK1.txt"
 SNR_TABLE_APSK3 = DATA_DIR / "SNRtable_APSK3.txt"
@@ -180,7 +180,7 @@ TX_BPL_PRE_FILE = TXDATA_DIR / "pre_DMT_bitloading_Tx_QAM.txt"
 WAVEFORM_DUMMY_LEN = DATA_DIR / "waveform_dummy_len.txt"
 COUNT_FILE = DATA_DIR / "count.txt"
 
-# NN 相关文件 (与 ZY_BiGRU_GPU.py 默认命名保持一致)
+# NN-related files (consistent with ZY_BiGRU_GPU.py default naming)
 NN_TX_FILE = NN_DIR / "Txdata_NN.txt"
 NN_RX1_FILE = NN_DIR / "Rxdata_NN1.txt"
 NN_RX2_FILE = NN_DIR / "Rxdata_NN2.txt"
@@ -190,17 +190,44 @@ NN_PRETRAINED = NN_DIR / "pretrained_model.pth"
 NN_MODEL_TEMP = NN_DIR / "trained_model_temp.pth"
 
 # -----------------------------------------------------------------------------
-# 绘图与后均衡选项
+# Plotting and post-equalization options
 # -----------------------------------------------------------------------------
-PLOT_SHOW = True                   # 是否在 Spyder 中 plt.show() 显示图像
-PLOT_SAVE = True                   # 是否保存 PNG（主流程已改用 CodePlot v5 脚本）
-PLOT_DPI = 300                     # 默认图像分辨率（Spyder 显示与保存共用）
+PLOT_SHOW = True                   # Whether to plt.show() figures in Spyder
+PLOT_SAVE = True                   # Whether to save PNG (main flow now uses CodePlot v5 scripts)
+PLOT_DPI = 300                     # Default image resolution (shared by Spyder display and saving)
 
-POSTEQ_FLAG = 1                    # 0=无 NN, 1=RNN/GRU, 2=MLP, 3=Volterra
-USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # main.py 默认是否调用 NN 后均衡
+POSTEQ_FLAG = 1                    # 0=no NN, 1=RNN/GRU, 2=MLP, 3=Volterra
+USE_NN = 1 if POSTEQ_FLAG != 0 else 0  # Whether main.py calls NN post-equalizer by default
 
 
 # -----------------------------------------------------------------------------
-# 随机种子 (保证可重复)
+# Random seed (for reproducibility)
 # -----------------------------------------------------------------------------
 RANDOM_SEED = 110
+
+
+# -----------------------------------------------------------------------------
+# Keithley 2400 SourceMeter (RS-232 / USB-to-RS232)
+# -----------------------------------------------------------------------------
+K2400_PORT = "COM1"               # Serial port name (auto-detect if left empty)
+K2400_BAUDRATE = 9600             # Default RS-232 baud rate for the 2400
+K2400_TIMEOUT = 5.0               # Serial read timeout in seconds
+K2400_SOURCE_MODE = "voltage"     # "voltage" or "current"
+K2400_LEVEL = 0.0                 # Source level (V in voltage mode, A in current mode)
+K2400_COMPLIANCE = 0.1            # Compliance limit (A in voltage mode, V in current mode)
+K2400_NPLC = 1.0                  # Measurement integration time
+
+
+# -----------------------------------------------------------------------------
+# Grid scan parameters (bias vs Vpp)
+# -----------------------------------------------------------------------------
+GRID_SCAN_PARAM1_NAME = "bias_voltage"  # displayed name / CSV header
+GRID_SCAN_PARAM1_MODE = "voltage"       # "voltage" or "current" (Keithley source mode)
+GRID_SCAN_PARAM1_START = 0.0
+GRID_SCAN_PARAM1_STOP = 1.0
+GRID_SCAN_PARAM1_STEP = 0.2
+GRID_SCAN_VPP_START = 0.1
+GRID_SCAN_VPP_STOP = 0.5
+GRID_SCAN_VPP_STEP = 0.1
+GRID_SCAN_RUN_MODE = "step1-4"          # "step1-4" or "step1-2"
+GRID_SCAN_REPEATS = 1                   # repeats of the final measurement step
