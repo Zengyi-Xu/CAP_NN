@@ -1,6 +1,6 @@
-"""传输记录管理.
+"""Transmission record management.
 
-为每一次测试生成唯一编号，并保存关键参数与结果。
+Generate a unique ID for each test and save key parameters and results.
 """
 import json
 from datetime import datetime
@@ -12,7 +12,7 @@ import config
 
 
 def generate_run_id() -> str:
-    """生成唯一测试编号：时间戳 + 短 UUID."""
+    """Generate a unique test ID: timestamp + short UUID."""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     short_uid = uuid.uuid4().hex[:6]
     return f"{ts}_{short_uid}"
@@ -21,15 +21,15 @@ def generate_run_id() -> str:
 def save_record(run_id: str,
                 record: Dict[str, Any],
                 record_dir: Path = config.RECORD_DIR) -> Path:
-    """保存测试记录为 JSON 和 文本摘要.
+    """Save the test record as JSON and a text summary.
 
     Args:
-        run_id: 本次测试唯一编号
-        record: 记录内容字典
-        record_dir: 记录保存目录
+        run_id: unique ID for this test
+        record: record content dict
+        record_dir: directory to save records
 
     Returns:
-        JSON 文件路径
+        JSON file path
     """
     record_dir = Path(record_dir)
     record_dir.mkdir(parents=True, exist_ok=True)
@@ -37,7 +37,7 @@ def save_record(run_id: str,
     json_path = record_dir / f"record_{run_id}.json"
     txt_path = record_dir / f"record_{run_id}.txt"
 
-    # 添加元信息
+    # Add metadata
     full_record = {
         "run_id": run_id,
         "timestamp": datetime.now().isoformat(),
@@ -48,7 +48,7 @@ def save_record(run_id: str,
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(full_record, f, indent=2, ensure_ascii=False, default=str)
 
-    # 文本摘要
+    # Text summary
     lines = [
         f"Run ID: {run_id}",
         f"Timestamp: {full_record['timestamp']}",

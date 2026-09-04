@@ -1,11 +1,11 @@
-"""CodePlot v5 绘图适配器.
+"""CodePlot v5 plotting adapter.
 
-把每次测试的绘图数据和可编辑的 CodePlot v5 脚本保存下来，
-同时在 Spyder 中直接显示图像。
+Saves plotting data and editable CodePlot v5 scripts for each test,
+and displays figures directly in Spyder.
 
-每个完整测试会在 data/codeplot_assets/<run_id>/ 下生成：
-    data/      : 每张图的 *.npz 数据
-    scripts/   : 每张图的 *.py 脚本（可用 codeplot_v5.py 打开编辑）
+Each complete test generates under data/codeplot_assets/<run_id>/:
+    data/      : *.npz data for each figure
+    scripts/   : *.py script for each figure (can be opened with codeplot_v5.py)
 """
 import json
 import numpy as np
@@ -21,7 +21,7 @@ CODEPLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _prepare_dirs(run_id: str):
-    """返回本次测试的 base、data、scripts 目录."""
+    """Return the base, data, and scripts directories for this test."""
     base = CODEPLOT_DIR / run_id
     data_dir = base / "data"
     script_dir = base / "scripts"
@@ -31,17 +31,17 @@ def _prepare_dirs(run_id: str):
 
 
 def _save_data(data_dir: Path, name: str, **arrays):
-    """把数组保存为 NPZ."""
+    """Save arrays as an NPZ file."""
     np.savez(data_dir / f"{name}.npz", **arrays)
 
 
 def _write_script(script_dir: Path, name: str, code: str):
-    """写入 CodePlot v5 可加载的脚本."""
+    """Write a CodePlot v5 loadable script."""
     (script_dir / f"{name}.py").write_text(code, encoding="utf-8")
 
 
 def _render_figure(script_code: str, script_path: Path, dpi: int = None):
-    """执行脚本并返回 Figure 对象."""
+    """Execute the script and return the Figure object."""
     if dpi is None:
         dpi = config.PLOT_DPI
     fig = plt.figure(dpi=dpi)
@@ -52,14 +52,14 @@ def _render_figure(script_code: str, script_path: Path, dpi: int = None):
 
 
 def _display(script_code: str, script_path: Path):
-    """在 Spyder 中显示图像（脚本里使用外部 fig 变量）."""
+    """Display the figure in Spyder (the script uses the external fig variable)."""
     _render_figure(script_code, script_path)
     plt.show()
 
 
 def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Template,
                       script_vars: dict):
-    """通用：保存数据、写脚本、保存图片/元数据、显示."""
+    """Generic: save data, write script, save image/metadata, and display."""
     base, data_dir, script_dir = _prepare_dirs(run_id)
     _save_data(data_dir, name, **arrays)
     script_vars = dict(script_vars)
@@ -68,10 +68,10 @@ def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Tem
     script_path = script_dir / f"{name}.py"
     _write_script(script_dir, name, script_code)
 
-    # 渲染一次，用于保存和/或显示
+    # Render once for saving and/or display
     fig = _render_figure(script_code, script_path)
 
-    # 保存 PNG 图片与元数据到 data/plots/<run_id>/
+    # Save PNG image and metadata to data/plots/<run_id>/
     if config.PLOT_SAVE:
         plot_dir = config.PLOT_DIR / run_id
         plot_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +98,7 @@ def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Tem
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 脚本模板
+# Script templates
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _TIME_TEMPLATE = Template("""import numpy as np
@@ -127,7 +127,7 @@ fs = float(data["fs"])
 
 n = len(sig)
 freqs = np.fft.fftshift(np.fft.fftfreq(n, d=1.0 / fs))
-# 与 MATLAB 保持一致：10*log10(abs(fft(sig)))
+# Consistent with MATLAB: 10*log10(abs(fft(sig)))
 spec = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
 
 ax = fig.add_subplot(111)
@@ -355,7 +355,7 @@ fig.tight_layout()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 对外接口
+# Public API
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def plot_time_waveform(t, sig, title: str, run_id: str, name: str):

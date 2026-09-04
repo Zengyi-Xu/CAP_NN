@@ -1,10 +1,10 @@
-"""示波器波形读取 (pyvisa, USB-B / USBTMC).
+"""Oscilloscope waveform readout (pyvisa, USB-B / USBTMC).
 
-改写自原始 MATLAB oscrunDMT.m / oscrunQPSK.m：
-- 通过 pyvisa 连接示波器 USB-B 口 (USBTMC)
-- 设置采样率、时基、波形格式
-- 读取指定通道的波形 preamble + data，并转换为电压
-- 可选重采样到 AWG 采样率
+Rewritten from the original MATLAB oscrunDMT.m / oscrunQPSK.m:
+- Connect to the oscilloscope USB-B port (USBTMC) via pyvisa
+- Set sample rate, timebase, and waveform format
+- Read the specified channel waveform preamble + data and convert to voltage
+- Optional resampling to AWG sample rate
 """
 import numpy as np
 import pyvisa
@@ -15,16 +15,16 @@ import config
 
 
 class KeysightScopeUSB:
-    """Keysight 示波器 USB-B (USBTMC) 控制."""
+    """Keysight oscilloscope USB-B (USBTMC) control."""
 
     def __init__(self,
                  resource: Optional[str] = None,
                  timeout_ms: int = 20000):
         """
         Args:
-            resource: pyvisa 资源字符串，如 "USB0::0x0957::0x17A6::MY12345678::INSTR"
-                      若为 None，则自动查找第一个 USB 仪器
-            timeout_ms: 通信超时
+            resource: pyvisa resource string, e.g. "USB0::0x0957::0x17A6::MY12345678::INSTR"
+                      If None, auto-detect the first USB instrument
+            timeout_ms: communication timeout
         """
         self.resource = resource
         self.timeout_ms = timeout_ms
@@ -36,12 +36,12 @@ class KeysightScopeUSB:
         return self.rm.list_resources()
     
     def connect(self) -> "KeysightScopeUSB":
-        """连接示波器，支持 USB 和 TCPIP."""
+        """Connect to the oscilloscope, supporting USB and TCPIP."""
         
         all_resources = self.list_resources()
         
         if self.resource is None or self.resource == "":
-            # 未指定地址：优先找 USB，没有则报错
+            # No address specified: prefer USB, raise error if none found
             usb_resources = [r for r in all_resources if r.startswith("USB")]
             if not usb_resources:
                 raise RuntimeError(
@@ -52,7 +52,7 @@ class KeysightScopeUSB:
         else:
             self._used_resource = self.resource
             
-            # 如果配置地址不在列表中，尝试按 VID/PID/SN 匹配（仅 USB）
+            # If configured address is not in the list, try matching by VID/PID/SN (USB only)
             if self._used_resource not in all_resources and self._used_resource.startswith("USB"):
                 try:
                     parts = self._used_resource.split("::")
@@ -83,7 +83,7 @@ class KeysightScopeUSB:
         print(f"  *IDN = {idn}")
         return self
     # def connect(self) -> "KeysightScopeUSB":
-    #     """连接示波器."""
+    #     """Connect to the oscilloscope."""
     #     if self.resource is None or self.resource == "":
     #         usb_resources = [r for r in self.list_resources() if r.startswith("USB")]
     #         if not usb_resources:
@@ -95,17 +95,17 @@ class KeysightScopeUSB:
     #         print(f"Auto-selected scope resource: {self._used_resource}")
     #     else:
     #         self._used_resource = self.resource
-
+    
     #     print(f"Connecting to oscilloscope at {self._used_resource} ...")
     #     self.inst = self.rm.open_resource(self._used_resource)
     #     self.inst.timeout = self.timeout_ms
     #     self.inst.write_termination = "\n"
     #     self.inst.read_termination = "\n"
-
+    
     #     idn = self.query("*IDN?")
     #     print(f"  *IDN = {idn}")
     #     return self
-
+    
     def close(self) -> None:
         if self.inst is not None:
             try:
@@ -138,11 +138,11 @@ class KeysightScopeUSB:
     def configure(self,
                   sample_rate: Optional[float] = None,
                   timebase_scale: Optional[float] = None) -> None:
-        """配置采集参数."""
+        """Configure acquisition parameters."""
         sample_rate = sample_rate or config.OSC_SAMPLE_RATE
         timebase_scale = timebase_scale or config.OSC_TIMEBASE_SCALE
 
-        # 较大的输入缓冲区，保证大波形能完整读取
+        # Larger input buffer to ensure large waveforms can be read completely
         try:
             self.inst.set_buffer(pyvisa.constants.VI_READ_BUF, 40_000_000)
             self.inst.set_buffer(pyvisa.constants.VI_WRITE_BUF, 1_000_000)
@@ -152,7 +152,7 @@ class KeysightScopeUSB:
        # self.write(":STOP")
         self.write(f":ACQUIRE:SRATE {sample_rate:.15g}")
         self.write(f":TIMEBASE:SCALE {timebase_scale:.15g}")
-        # 固定采集点数，确保能覆盖完整 DMT 波形（4M 点 @ 10 GSa/s = 400 us）
+        # Fixed number of acquisition points to cover the complete DMT waveform (4M points @ 10 GSa/s = 400 us)
         try:
             self.write(":ACQUIRE:POINTS:AUTO OFF")
             self.write(":ACQUIRE:POINTS 4000000")
@@ -165,7 +165,7 @@ class KeysightScopeUSB:
         print(f"Scope configured: fs={sample_rate/1e9:.2f} GSa/s, timebase={timebase_scale*1e6:.1f} us/div, points=4000000")
 
     def read_preamble(self, channel: Optional[str] = None) -> dict:
-        """读取并解析 :WAVEFORM:PREAMBLE?"""
+        """Read and parse :WAVEFORM:PREAMBLE?"""
         channel = channel or config.OSC_CHANNEL
         self.write(f":WAVEFORM:SOURCE {channel}")
         preamble_str = self.query(":WAVEFORM:PREAMBLE?")
@@ -181,13 +181,13 @@ class KeysightScopeUSB:
     def read_waveform(self,
                       channel: Optional[str] = None,
                       include_preamble: bool = True) -> Tuple[np.ndarray, dict]:
-        """读取指定通道波形.
+        """Read the specified channel waveform.
 
         Returns:
-            ydata: 电压值数组 (V)
-            preamble: 解析后的 preamble 字典
+            ydata: voltage array (V)
+            preamble: parsed preamble dict
         """
-        # ✅ 新增：重新运行示波器，等待一次完整采集完成
+        # New: restart the oscilloscope and wait for one complete acquisition
         self.write(":RUN")
         channel = channel or config.OSC_CHANNEL
         self.write(f":WAVEFORM:SOURCE {channel}")
@@ -197,7 +197,7 @@ class KeysightScopeUSB:
         else:
             preamble = {}
 
-        # 读取原始 ADC 值 (int16)
+        # Read raw ADC values (int16)
         self.write(":WAV:DATA?")
         raw = self.inst.read_binary_values(
             datatype="h",
@@ -206,8 +206,8 @@ class KeysightScopeUSB:
             expect_termination=True
         )
 
-        # 某些固件会在 binblock 后再跟一个换行符；read_binary_values 已处理大部分情况
-        # 如果残留则忽略
+        # Some firmware appends an extra newline after the binblock; read_binary_values handles most cases
+        # Ignore any leftover
         try:
             leftover = self.inst.read_bytes(1)
         except pyvisa.errors.VisaIOError:
@@ -230,17 +230,17 @@ class KeysightScopeUSB:
                 sample_rate: Optional[float] = None,
                 timebase_scale: Optional[float] = None,
                 resample_to_awg: bool = True) -> Tuple[np.ndarray, dict]:
-        """一键采集：配置 + 读取.
+        """One-click capture: configure + read.
 
         Args:
-            channel: 通道名
-            sample_rate: 示波器采样率
-            timebase_scale: 时基
-            resample_to_awg: 是否重采样到 AWG 采样率
+            channel: channel name
+            sample_rate: oscilloscope sample rate
+            timebase_scale: timebase
+            resample_to_awg: whether to resample to AWG sample rate
 
         Returns:
-            data: 电压波形
-            preamble: 解析后的 preamble
+            data: voltage waveform
+            preamble: parsed preamble
         """
         self.configure(sample_rate, timebase_scale)
         data, preamble = self.read_waveform(channel)
@@ -258,7 +258,7 @@ class KeysightScopeUSB:
 def capture_to_file(out_path: Optional[Path] = None,
                     resource: Optional[str] = None,
                     channel: Optional[str] = None) -> np.ndarray:
-    """便捷函数：采集一次并保存到文件."""
+    """Convenience function: capture once and save to file."""
     if out_path is None:
         from utils import load_txt, save_txt
         count = 0

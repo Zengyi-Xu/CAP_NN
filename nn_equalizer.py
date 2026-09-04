@@ -1,9 +1,9 @@
-"""NN 后均衡器包装器.
+"""NN post-equalizer wrapper.
 
-直接调用现有的 ZY_BiGRU_GPU.py：
-1. 把 Tx/Rx 波形写入 NN 目录下 ZY_BiGRU_GPU.py 期望的文件名
-2. 在 NN 目录中以子进程方式运行 ZY_BiGRU_GPU.py
-3. 读取生成的 Rxdata_afterNN1.txt 并返回
+Directly calls the existing ZY_BiGRU_GPU.py:
+1. Write Tx/Rx waveforms to the filenames expected by ZY_BiGRU_GPU.py in the NN directory
+2. Run ZY_BiGRU_GPU.py as a subprocess in the NN directory
+3. Read the generated Rxdata_afterNN1.txt and return it
 """
 import numpy as np
 import subprocess
@@ -19,7 +19,7 @@ from utils import save_txt, load_txt
 
 
 class NNEqualizer:
-    """ZY_BiGRU_GPU 包装器."""
+    """ZY_BiGRU_GPU wrapper."""
 
     def __init__(self,
                  nn_dir: Path = config.NN_DIR,
@@ -35,34 +35,34 @@ class NNEqualizer:
             output_name: str = "Rxdata_afterNN1.txt",
             epochs: Optional[int] = None,
             use_pretrained: bool = True) -> np.ndarray:
-        """运行 NN 均衡.
+        """Run NN equalization.
 
         Args:
-            tx_waveform: 发送端参考波形
-            rx_waveform: 接收端波形
-            output_name: NN 输出文件名
-            epochs: 训练轮数（若提供则临时修改脚本中的 epochs）
-            use_pretrained: 是否优先使用已训练的 trained_model_temp.pth
+            tx_waveform: transmitted reference waveform
+            rx_waveform: received waveform
+            output_name: NN output filename
+            epochs: number of training epochs (if provided, temporarily modify the epochs in the script)
+            use_pretrained: whether to prefer the already-trained trained_model_temp.pth
 
         Returns:
-            NN 均衡后的波形 (1-D numpy 数组)
+            NN-equalized waveform (1-D numpy array)
         """
         if not self.script.exists():
             raise FileNotFoundError(f"NN script not found: {self.script}")
 
-        # 归一化并写入 NN 目录（与原始脚本保持一致）
+        # Normalize and write to NN directory (consistent with original script)
         tx_norm = tx_waveform / np.max(np.abs(tx_waveform))
         rx_norm = rx_waveform / np.max(np.abs(rx_waveform))
 
         save_txt(self.nn_dir / "Txdata_NN.txt", tx_norm)
         save_txt(self.nn_dir / "Rxdata_NN1.txt", rx_norm)
 
-        # 构造环境变量
+        # Build environment variables
         env = os.environ.copy()
-        env["MPLBACKEND"] = "Agg"  # 避免 plt.show() 阻塞
-        env["DISABLE_TQDM"] = "1"  # 关闭 NN 训练进度条
+        env["MPLBACKEND"] = "Agg"  # Avoid plt.show() blocking
+        env["DISABLE_TQDM"] = "1"  # Disable NN training progress bar
 
-        # 子进程运行 NN 脚本（实时流式输出，便于 GUI 即时显示进度）
+        # Run NN script in a subprocess (stream output in real time for GUI progress display)
         cmd = [self.python_exe, str(self.script)]
         print(f"Running NN equalizer: {' '.join(cmd)}")
         proc = subprocess.Popen(
@@ -102,6 +102,6 @@ class NNEqualizer:
 def run_nn_equalizer(tx_waveform: np.ndarray,
                      rx_waveform: np.ndarray,
                      nn_dir: Path = config.NN_DIR) -> np.ndarray:
-    """便捷函数."""
+    """Convenience function."""
     eq = NNEqualizer(nn_dir=nn_dir)
     return eq.run(tx_waveform, rx_waveform)

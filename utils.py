@@ -1,4 +1,4 @@
-"""通用工具函数：文件 I/O、同步、重采样、绘图等."""
+"""General utility functions: file I/O, synchronization, resampling, plotting, etc."""
 import json
 import os
 import numpy as np
@@ -9,7 +9,7 @@ from pathlib import Path
 import matplotlib
 import config
 
-# 在 IPython/Spyder 环境中，提前用 magic 设置 inline 后端，确保图像显示在 Plots 窗口
+# In IPython/Spyder, set the inline backend ahead of time so figures show in the Plots pane
 if config.PLOT_SHOW:
     try:
         from IPython import get_ipython
@@ -21,22 +21,22 @@ if config.PLOT_SHOW:
 
 import matplotlib.pyplot as plt
 
-# 统一默认分辨率
+# Unified default resolution
 matplotlib.rcParams["figure.dpi"] = config.PLOT_DPI
 
 
 # -----------------------------------------------------------------------------
-# 文件 I/O
+# File I/O
 # -----------------------------------------------------------------------------
 def load_txt(path: Path, dtype=float) -> np.ndarray:
-    """读取文本文件为 numpy 数组."""
+    """Read a text file as a numpy array."""
     if isinstance(path, str):
         path = Path(path)
     return np.loadtxt(path, dtype=dtype)
 
 
 def save_txt(path: Path, data: np.ndarray, fmt="%.6f") -> None:
-    """保存 numpy 数组到文本文件."""
+    """Save a numpy array to a text file."""
     if isinstance(path, str):
         path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,14 +44,14 @@ def save_txt(path: Path, data: np.ndarray, fmt="%.6f") -> None:
 
 
 def load_mat(path: Path, squeeze=True) -> dict:
-    """读取 .mat 文件，返回 dict."""
+    """Read a .mat file and return a dict."""
     if isinstance(path, str):
         path = Path(path)
     return sio.loadmat(path, squeeze_me=squeeze)
 
 
 def save_mat(path: Path, **kwargs) -> None:
-    """保存变量到 .mat 文件."""
+    """Save variables to a .mat file."""
     if isinstance(path, str):
         path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -59,20 +59,20 @@ def save_mat(path: Path, **kwargs) -> None:
 
 
 def save_rx_config(rx_file: Path, **kwargs) -> Path:
-    """保存与接收波形对应的信号配置 JSON.
+    """Save the signal configuration JSON corresponding to a received waveform.
 
     Args:
-        rx_file: 接收波形文件路径，如 rawOSC_QPSK_SNRest_0.txt
-        **kwargs: 需要记录的配置项
+        rx_file: Received waveform file path, e.g. rawOSC_QPSK_SNRest_0.txt
+        **kwargs: Configuration items to record
 
     Returns:
-        保存的 JSON 文件路径，如 rawOSC_QPSK_SNRest_0_config.json
+        Path of the saved JSON file, e.g. rawOSC_QPSK_SNRest_0_config.json
     """
     if isinstance(rx_file, str):
         rx_file = Path(rx_file)
     cfg_path = rx_file.parent / f"{rx_file.stem}_config.json"
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
-    # 确保可序列化
+    # Ensure serializability
     record = {}
     for k, v in kwargs.items():
         if isinstance(v, np.ndarray):
@@ -87,14 +87,14 @@ def save_rx_config(rx_file: Path, **kwargs) -> Path:
 
 
 # -----------------------------------------------------------------------------
-# 波形处理
+# Waveform processing
 # -----------------------------------------------------------------------------
 def add_dummy(x: np.ndarray, base: int = 64) -> tuple:
-    """在波形末尾补零使其长度为 base 的整数倍.
+    """Zero-pad the waveform at the end so its length is an integer multiple of base.
 
     Returns:
-        with_dummy: 补零后的数组
-        dummies: 补的零数组
+        with_dummy: zero-padded array
+        dummies: the appended zero array
     """
     x = np.asarray(x).ravel()
     if x.ndim != 1:
@@ -107,11 +107,11 @@ def add_dummy(x: np.ndarray, base: int = 64) -> tuple:
 
 
 def resample_signal(x: np.ndarray, fs_target: float, fs_source: float) -> np.ndarray:
-    """使用有理数重采样把 x 从 fs_source 重采样到 fs_target."""
+    """Resample x from fs_source to fs_target using rational resampling."""
     x = np.asarray(x).ravel()
     if fs_source == fs_target:
         return x
-    # 寻找近似整数比
+    # Find an approximate integer ratio
     from fractions import Fraction
     frac = fs_target / fs_source
     f = Fraction(frac).limit_denominator(1000)
@@ -120,26 +120,27 @@ def resample_signal(x: np.ndarray, fs_target: float, fs_source: float) -> np.nda
 
 
 def sync_waveform(rx: np.ndarray, tx: np.ndarray, h: int = 1) -> np.ndarray:
-    """用 FFT 加速互相关对接收波形做符号同步，取与 tx 等长片段.
+    """Use FFT-accelerated cross-correlation to symbol-synchronize the received waveform,
+    returning a segment of the same length as tx.
 
     Args:
-        rx: 接收波形 (1-D)
-        tx: 发送波形 (1-D)
-        h: 同步偏移修正量
+        rx: received waveform (1-D)
+        tx: transmitted waveform (1-D)
+        h: synchronization offset correction
 
     Returns:
-        同步后的接收波形，长度与 tx 相同
+        Synchronized received waveform with the same length as tx
     """
     rx = np.asarray(rx).ravel()
     tx = np.asarray(tx).ravel()
-    # 使用 FFT 加速（避免 np.correlate 在大长度时 O(N^2) 直接计算）
+    # Use FFT acceleration (avoid np.correlate's O(N^2) direct computation for large lengths)
     corr = sg.correlate(np.real(rx), np.real(tx), mode="full", method="fft")
     lags = np.arange(-(len(tx) - 1), len(rx))
     offset = np.argmax(np.abs(corr))
     start = lags[offset] + h
     end = start + len(tx)
     if end > len(rx):
-        # 如果超出范围，找次大值
+        # If out of range, find the second largest value
         corr[offset] = 0
         offset = np.argmax(np.abs(corr))
         start = lags[offset] + h
@@ -152,7 +153,7 @@ def sync_waveform(rx: np.ndarray, tx: np.ndarray, h: int = 1) -> np.ndarray:
 
 
 def center_normalize(x: np.ndarray) -> np.ndarray:
-    """最大-最小值归一化并居中 (与 MATLAB 代码一致)."""
+    """Max-min normalization and centering (consistent with MATLAB code)."""
     x = np.asarray(x).ravel()
     x = x / (np.max(x) - np.min(x))
     x = x - (np.abs(np.max(x)) - np.abs(np.min(x))) / 2
@@ -160,13 +161,13 @@ def center_normalize(x: np.ndarray) -> np.ndarray:
 
 
 # -----------------------------------------------------------------------------
-# 预均衡辅助
+# Pre-equalization helpers
 # -----------------------------------------------------------------------------
 def apply_hardware_preEQ(dataifft1: np.ndarray,
                          fsamp: float,
                          upsampleno: int,
                          th7_file: Path) -> np.ndarray:
-    """应用硬件预均衡 (pre_equ_flag=3)."""
+    """Apply hardware pre-equalization (pre_equ_flag=3)."""
     f_hardware = load_txt(th7_file).ravel()
     f_hardware_use = np.concatenate([np.flip(f_hardware), f_hardware])
 
@@ -191,19 +192,19 @@ def apply_hardware_preEQ(dataifft1: np.ndarray,
 
 
 # -----------------------------------------------------------------------------
-# 绘图辅助
+# Plotting helpers
 # -----------------------------------------------------------------------------
 def _should_show(show: bool = None) -> bool:
-    """根据传入参数或 config 决定是否显示图像."""
+    """Decide whether to show the figure based on the argument or config."""
     if show is None:
         return config.PLOT_SHOW
     return show
 
 
 def _finalize_figure(fig, out: Path, show: bool = None) -> None:
-    """保存并/或显示图像.
+    """Save and/or display the figure.
 
-    在 Spyder 中显示时先不关闭 figure，否则 Plots 窗口会清空。
+    Do not close the figure while displaying in Spyder, otherwise the Plots pane will clear.
     """
     show = _should_show(show)
     if out is not None and config.PLOT_SAVE:
@@ -211,14 +212,14 @@ def _finalize_figure(fig, out: Path, show: bool = None) -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out, dpi=config.PLOT_DPI, bbox_inches="tight")
     if show:
-        # 在 Spyder 的 Inline 后端中会显示到 Plots 窗口
+        # Shown in the Plots pane with Spyder's Inline backend
         plt.show()
     else:
         plt.close(fig)
 
 
 # -----------------------------------------------------------------------------
-# 基础绘图
+# Basic plotting
 # -----------------------------------------------------------------------------
 def plot_time_waveform(t: np.ndarray, sig: np.ndarray, title: str, out: Path = None,
                        show: bool = None) -> None:
@@ -235,7 +236,7 @@ def plot_spectrum(sig: np.ndarray, fs: float, title: str, out: Path = None,
                   show: bool = None) -> None:
     n = len(sig)
     freqs = np.fft.fftshift(np.fft.fftfreq(n, d=1.0 / fs))
-    # 与 MATLAB 保持一致：10*log10(abs(fft(sig)))
+    # Consistent with MATLAB: 10*log10(abs(fft(sig)))
     spec = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(freqs, spec, "b-")
@@ -259,7 +260,7 @@ def plot_constellation(iq: np.ndarray, title: str, out: Path = None,
 
 
 def _snr_to_db(snr: np.ndarray) -> np.ndarray:
-    """把线性 SNR 转成 dB，避免 log(0)."""
+    """Convert linear SNR to dB, avoiding log(0)."""
     return 10 * np.log10(np.maximum(np.asarray(snr, dtype=float), 1e-12))
 
 
@@ -277,11 +278,11 @@ def plot_snrs(est: np.ndarray, real: np.ndarray, out: Path = None,
 
 
 # -----------------------------------------------------------------------------
-# 新增：DMT 专用绘图
+# New: DMT-specific plotting
 # -----------------------------------------------------------------------------
 def plot_dmt_spectrogram(sig: np.ndarray, fs: float, title: str,
                          out: Path = None, show: bool = None) -> None:
-    """绘制 DMT 信号时频谱（spectrogram）."""
+    """Plot the DMT signal spectrogram."""
     sig = np.asarray(sig).ravel()
     nperseg = min(1024, len(sig) // 8)
     noverlap = nperseg // 2
@@ -299,21 +300,21 @@ def plot_dmt_spectrogram(sig: np.ndarray, fs: float, title: str,
 
 def plot_tx_rx_nonlinearity(tx: np.ndarray, rx: np.ndarray,
                             out: Path = None, show: bool = None) -> None:
-    """绘制接收信号非线性：横轴为发射波形幅值，纵轴为接收波形幅值."""
+    """Plot received-signal nonlinearity: x-axis is TX waveform amplitude, y-axis is RX waveform amplitude."""
     tx = np.asarray(tx).ravel()
     rx = np.asarray(rx).ravel()
     if len(tx) != len(rx):
         raise ValueError("tx and rx must have the same length")
 
     fig, ax = plt.subplots(figsize=(7, 7))
-    # 点太多时用 hexbin，否则 scatter
+    # Use hexbin when there are too many points, otherwise scatter
     if len(tx) > 5000:
         hb = ax.hexbin(tx, rx, gridsize=80, cmap="GnBu", mincnt=1)
         fig.colorbar(hb, ax=ax, label="Density")
     else:
         ax.plot(tx, rx, "b.", alpha=0.2)
 
-    # 理想线性参考线（斜率为当前 tx->rx 最小二乘增益）
+    # Ideal linear reference line (slope is the least-squares tx->rx gain)
     if np.any(tx):
         gain = np.sum(tx * rx) / np.sum(tx ** 2)
         t = np.linspace(tx.min(), tx.max(), 100)
@@ -335,10 +336,10 @@ def plot_bit_power_loading(subcarriers: np.ndarray,
                            rate_gbps: float,
                            out: Path = None,
                            show: bool = None) -> None:
-    """绘制每个子载波的 SNR、比特加载与功率分配，并标注 ratio."""
+    """Plot per-subcarrier SNR, bit loading, and power allocation, and annotate the ratio."""
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
 
-    # 上半：SNR + bit allocation 双 y 轴
+    # Upper: SNR + bit allocation on twin y-axes
     ax1_bits = ax1.twinx()
     l1 = ax1.plot(subcarriers, snrs_db, "b-", lw=1.5, label="SNR (dB)")
     l2 = ax1_bits.plot(subcarriers, RQ, "r-", lw=1.5, marker="x",
@@ -351,7 +352,7 @@ def plot_bit_power_loading(subcarriers: np.ndarray,
     labels = [l.get_label() for l in lines]
     ax1.legend(lines, labels, loc="upper right")
 
-    # 下半：功率分配
+    # Lower: power allocation
     ax2.plot(subcarriers, S, "g-", lw=1.5, marker="o", markersize=2,
              label="Power allocation")
     ax2.set_xlabel("Subcarrier")
@@ -365,7 +366,7 @@ def plot_bit_power_loading(subcarriers: np.ndarray,
 def plot_ser_ber_per_carrier(ser: np.ndarray, ber: np.ndarray,
                              RQ: np.ndarray = None,
                              out: Path = None, show: bool = None) -> None:
-    """绘制每个子载波的 SER 与 BER."""
+    """Plot per-subcarrier SER and BER."""
     carrier_idx = np.arange(len(ser))
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
 
@@ -380,7 +381,7 @@ def plot_ser_ber_per_carrier(ser: np.ndarray, ber: np.ndarray,
     ax2.set_title("Bit Error Rate per Subcarrier")
     ax2.grid(True, which="both", ls="--")
 
-    # 可选叠加 bit allocation，便于对比
+    # Optional bit allocation overlay for comparison
     if RQ is not None:
         ax2_twin = ax2.twinx()
         ax2_twin.plot(carrier_idx, RQ, "g--", alpha=0.5, label="Bit allocation")
@@ -396,13 +397,13 @@ def plot_constellation_density(out2: np.ndarray,
                                pilot_mask: np.ndarray = None,
                                out: Path = None,
                                show: bool = None) -> None:
-    """按调制阶数分类绘制接收星座点分布密度.
+    """Plot received constellation density classified by modulation order.
 
     Args:
-        out2: 均衡后频域符号 (carrierno1, datano)
-        in_ref: 发送参考符号 (carrierno1, datano)
-        RQ: 每个子载波的比特数
-        pilot_mask: 导频位置掩码
+        out2: equalized frequency-domain symbols (carrierno1, datano)
+        in_ref: transmitted reference symbols (carrierno1, datano)
+        RQ: bits per subcarrier
+        pilot_mask: pilot position mask
     """
     out2 = np.asarray(out2)
     in_ref = np.asarray(in_ref)
@@ -436,7 +437,7 @@ def plot_constellation_density(out2: np.ndarray,
             continue
         pts = np.concatenate(pts)
 
-        # 星座点密度：hexbin
+        # Constellation point density: hexbin
         hb = ax.hexbin(pts.real, pts.imag, gridsize=max(30, 2 * int(2 ** (bits / 2))),
                        cmap="GnBu", mincnt=1)
         fig.colorbar(hb, ax=ax, label="Density")
@@ -447,7 +448,7 @@ def plot_constellation_density(out2: np.ndarray,
         ax.axis("equal")
         ax.grid(True)
 
-    # 隐藏未使用的子图
+    # Hide unused subplots
     for idx in range(len(orders), nrows * ncols):
         axes[idx // ncols, idx % ncols].set_visible(False)
 
@@ -462,13 +463,13 @@ def plot_constellation_by_order(out2: np.ndarray,
                                 pilot_mask: np.ndarray = None,
                                 out: Path = None,
                                 show: bool = None) -> None:
-    """按调制阶数分类绘制接收星座点散点图（每个阶数一张子图）.
+    """Plot received constellation scatter classified by modulation order (one subplot per order).
 
     Args:
-        out2: 均衡后频域符号 (carrierno1, datano)
-        in_ref: 发送参考符号 (carrierno1, datano)
-        RQ: 每个子载波的比特数
-        pilot_mask: 导频位置掩码
+        out2: equalized frequency-domain symbols (carrierno1, datano)
+        in_ref: transmitted reference symbols (carrierno1, datano)
+        RQ: bits per subcarrier
+        pilot_mask: pilot position mask
     """
     out2 = np.asarray(out2)
     in_ref = np.asarray(in_ref)
@@ -510,7 +511,7 @@ def plot_constellation_by_order(out2: np.ndarray,
         ax.axis("equal")
         ax.grid(True)
 
-    # 隐藏未使用的子图
+    # Hide unused subplots
     for idx in range(len(orders), nrows * ncols):
         axes[idx // ncols, idx % ncols].set_visible(False)
 

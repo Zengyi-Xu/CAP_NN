@@ -1,4 +1,4 @@
-"""DMT 核心算法：调制、解调、bitloading、SNR/BER 估计."""
+"""DMT core algorithms: modulation, demodulation, bitloading, SNR/BER estimation."""
 import numpy as np
 from scipy.special import erfc
 from scipy.ndimage import uniform_filter1d
@@ -12,10 +12,10 @@ import config
 
 
 # -----------------------------------------------------------------------------
-# 星座映射
+# Constellation mapping
 # -----------------------------------------------------------------------------
 def load_constellation(order: int, constellation: str, data_dir: Path = config.DATA_DIR) -> np.ndarray:
-    """读取 goodGS{order}QAM{constellation}.txt 的星座点."""
+    """Read constellation points from goodGS{order}QAM{constellation}.txt."""
     fname = data_dir / f"goodGS{order}QAM{constellation}.txt"
     tab = load_txt(fname)
     if tab.ndim == 1:
@@ -25,14 +25,14 @@ def load_constellation(order: int, constellation: str, data_dir: Path = config.D
 
 def qam_modulate(data_decimal: np.ndarray, order: int, constellation: str,
                  data_dir: Path = config.DATA_DIR) -> np.ndarray:
-    """将十进制符号映射到星座点."""
+    """Map decimal symbols to constellation points."""
     cons = load_constellation(order, constellation, data_dir)
     return cons[np.asarray(data_decimal, dtype=int).ravel()]
 
 
 def qam_demodulate(sig: np.ndarray, order: int, constellation: str,
                    data_dir: Path = config.DATA_DIR) -> np.ndarray:
-    """最小欧氏距离解调."""
+    """Minimum Euclidean distance demodulation."""
     cons = load_constellation(order, constellation, data_dir)
     sig_flat = np.asarray(sig).ravel()
     idx = np.argmin(np.abs(sig_flat[:, None] - cons[None, :]), axis=1)
@@ -40,14 +40,14 @@ def qam_demodulate(sig: np.ndarray, order: int, constellation: str,
 
 
 # -----------------------------------------------------------------------------
-# 比特加载
+# Bit loading
 # -----------------------------------------------------------------------------
 def load_snr_table(path: Path) -> np.ndarray:
-    """读取 SNR 门限表.
+    """Read the SNR threshold table.
 
-    支持两种格式：
-    - 单列：视为 order=1..N 对应的 SNR 门限
-    - 两列：[order, snr]
+    Supports two formats:
+    - Single column: treated as SNR thresholds for order=1..N
+    - Two columns: [order, snr]
     """
     tab = load_txt(path)
     if tab.ndim == 1:
@@ -57,15 +57,15 @@ def load_snr_table(path: Path) -> np.ndarray:
 
 def assign_qam_order_from_snr(snrs: np.ndarray, snr_table: np.ndarray,
                               b_max: int = 10) -> np.ndarray:
-    """就低不就高地为每个子载波分配 QAM 阶数.
+    """Assign a QAM order to each subcarrier by rounding down.
 
     Args:
-        snrs: 每个子载波的 SNR（线性值）
-        snr_table: 两列 [order, snr_threshold]
-        b_max: 最大允许阶数
+        snrs: per-subcarrier SNR (linear)
+        snr_table: two columns [order, snr_threshold]
+        b_max: maximum allowed order
 
     Returns:
-        每个子载波的调制阶数（比特/符号）
+        modulation order (bits/symbol) for each subcarrier
     """
     snrs = np.asarray(snrs).ravel()
     orders = snr_table[:, 0].astype(int)
@@ -91,12 +91,12 @@ def _truncate_bits(b: np.ndarray, b_max: int, b_min: int = 0) -> np.ndarray:
 
 def bit_loading_hh(snrs: np.ndarray, qam_order_all: np.ndarray,
                    snr_table: np.ndarray) -> Tuple[np.ndarray, np.ndarray, int]:
-    """BL_myalgo: 自创 HH-like 比特/功率分配.
+    """BL_myalgo: custom HH-like bit/power allocation.
 
     Returns:
-        S: 功率比例（需开根号后使用）
-        RQ: 最终比特分配
-        raise_num: 升阶子载波数
+        S: power ratio (take square root before use)
+        RQ: final bit allocation
+        raise_num: number of subcarriers raised in order
     """
     N = len(snrs)
     snrs = np.asarray(snrs).ravel().astype(float)
@@ -145,25 +145,25 @@ def bit_loading_hh(snrs: np.ndarray, qam_order_all: np.ndarray,
 def bit_loading_lc(snrs: np.ndarray, qam_order_all: np.ndarray,
                    snr_table: np.ndarray, SE_add: float = 0.0,
                    b_max: int = 10) -> Tuple[np.ndarray, np.ndarray]:
-    """BL_LC_MM4: 简化 Levin-Campello 比特/功率分配.
+    """BL_LC_MM4: simplified Levin-Campello bit/power allocation.
 
     Args:
-        snrs: 每个子载波 SNR（线性）
-        qam_order_all: 初始阶数
+        snrs: per-subcarrier SNR (linear)
+        qam_order_all: initial order
         snr_table: [order, threshold]
-        SE_add: 总比特预算调整量（相对于 sum(qam_order_all)）
-        b_max: 最大阶数
+        SE_add: total bit budget adjustment (relative to sum(qam_order_all))
+        b_max: maximum order
 
     Returns:
-        S: 功率比例
-        RQ: 最终比特分配
+        S: power ratio
+        RQ: final bit allocation
     """
     N = len(snrs)
     snrs = np.asarray(snrs).ravel().astype(float)
     qam_order_all = np.asarray(qam_order_all).ravel().astype(int)
     B = qam_order_all.sum() + SE_add
 
-    # 初始阶数
+    # Initial order
     b_ori = assign_qam_order_from_snr(snrs, snr_table, b_max=b_max)
     b = _truncate_bits(b_ori, b_max)
 
@@ -171,7 +171,7 @@ def bit_loading_lc(snrs: np.ndarray, qam_order_all: np.ndarray,
         print("Out of the max capacity, please enhance b_max!")
         return np.ones(N), np.full(N, b_max, dtype=int)
 
-    # 确定全局偏移 i
+    # Determine global offset i
     if b.sum() > B:
         i = 0
         while b.sum() > B:
@@ -192,7 +192,7 @@ def bit_loading_lc(snrs: np.ndarray, qam_order_all: np.ndarray,
         print("The operation about i is wrong, please check!")
         return np.ones(N), qam_order_all
 
-    # 按 SNR 降序排列
+    # Sort by descending SNR
     g, idx_g = np.sort(snrs)[::-1], np.argsort(snrs)[::-1]
     b_sorted = b[idx_g].astype(int)
     lock = b_sorted >= b_max
@@ -246,13 +246,13 @@ def bit_loading_lc(snrs: np.ndarray, qam_order_all: np.ndarray,
         delta_e_up[a] = e_up[a] - e_now[a]
         delta_e_down[a] = e_now[a] - e_down[a]
 
-    # 输出按原始顺序
+    # Output in original order
     S = np.zeros(N)
     RQ = np.zeros(N, dtype=int)
     S[idx_g] = e_now
     RQ[idx_g] = b_sorted
 
-    # 诊断
+    # Diagnostics
     if delta_e_down.max() > delta_e_up.min():
         print("Levin Campello is Not Efficient!")
     else:
@@ -266,22 +266,22 @@ def bit_loading_lc(snrs: np.ndarray, qam_order_all: np.ndarray,
 
 
 # -----------------------------------------------------------------------------
-# 导频图案
+# Pilot patterns
 # -----------------------------------------------------------------------------
 def create_pilot_mask(carrierno1: int,
                       datano: int,
                       pattern: str = config.PILOT_PATTERN,
                       **kwargs) -> np.ndarray:
-    """创建导频位置掩码.
+    """Create a pilot position mask.
 
     Args:
-        carrierno1: 有效子载波数
-        datano: 符号数
+        carrierno1: number of valid subcarriers
+        datano: number of symbols
         pattern: "training_only" | "comb" | "mesh"
-        kwargs: 可覆盖 config 中的导频参数
+        kwargs: can override pilot parameters in config
 
     Returns:
-        mask: bool 矩阵 (carrierno1, datano)，True 表示导频位置
+        mask: bool matrix (carrierno1, datano), True indicates pilot position
     """
     mask = np.zeros((carrierno1, datano), dtype=bool)
     if pattern == "training_only" or pattern is None:
@@ -314,10 +314,10 @@ def insert_pilots(qamdata: np.ndarray,
                   origin_dec_data: np.ndarray,
                   mask: np.ndarray,
                   pilot_value: complex = config.PILOT_VALUE) -> tuple:
-    """在指定位置插入导频.
+    """Insert pilots at specified positions.
 
     Returns:
-        qamdata, AVT, origin_dec_data (均已修改)
+        qamdata, AVT, origin_dec_data (all modified)
     """
     if not mask.any():
         return qamdata, AVT, origin_dec_data
@@ -336,18 +336,18 @@ def _interp2d(pilot_sc: np.ndarray,
               carrierno1: int,
               datano: int,
               fill_value: float = 0.0) -> np.ndarray:
-    """使用 scipy.interpolate.griddata 做二维线性插值，边界用最近邻填充."""
+    """Use scipy.interpolate.griddata for 2D linear interpolation; fill boundaries with nearest neighbor."""
     from scipy.interpolate import griddata
     grid_sc, grid_sym = np.meshgrid(np.arange(carrierno1), np.arange(datano), indexing="ij")
     interp = griddata((pilot_sc, pilot_sym), values, (grid_sc, grid_sym),
                       method="linear", fill_value=np.nan)
-    # 对落在凸包外的点使用最近邻填充
+    # Fill points outside the convex hull with nearest neighbor
     nan_mask = np.isnan(interp)
     if np.any(nan_mask):
         interp[nan_mask] = griddata((pilot_sc, pilot_sym), values,
                                     (grid_sc[nan_mask], grid_sym[nan_mask]),
                                     method="nearest")
-    # 最终兜底
+    # Final fallback
     interp = np.nan_to_num(interp, nan=fill_value, posinf=fill_value, neginf=fill_value)
     return interp
 
@@ -355,23 +355,23 @@ def _interp2d(pilot_sc: np.ndarray,
 def estimate_channel_from_pilots(rv_down: np.ndarray,
                                  qamdata: np.ndarray,
                                  mask: np.ndarray) -> np.ndarray:
-    """利用导频估计每子载波/每符号的信道响应 H.
+    """Use pilots to estimate the channel response H per subcarrier/symbol.
 
-    - 梳状导频：每符号都有导频，采用一维频率插值（更快）
-    - 网状导频：稀疏分布，采用二维时频插值
+    - Comb pilots: every symbol has pilots, use 1D frequency interpolation (faster)
+    - Mesh pilots: sparsely distributed, use 2D time-frequency interpolation
 
     Args:
-        rv_down: 接收频域符号 (carrierno1, datano)
-        qamdata: 发送参考符号 (含导频)
-        mask: 导频掩码
+        rv_down: received frequency-domain symbols (carrierno1, datano)
+        qamdata: transmitted reference symbols (including pilots)
+        mask: pilot mask
 
     Returns:
-        H: 信道响应矩阵 (carrierno1, datano)
+        H: channel response matrix (carrierno1, datano)
     """
     carrierno1, datano = rv_down.shape
     all_freqs = np.arange(carrierno1)
 
-    # 判断是否为梳状（每列至少有一个导频）
+    # Determine if comb-like (at least one pilot per column)
     is_comb_like = np.all(mask.any(axis=0))
 
     if is_comb_like:
@@ -389,7 +389,7 @@ def estimate_channel_from_pilots(rv_down: np.ndarray,
                 H[:, t] = H_real + 1j * H_imag
         return H
     else:
-        # 网状：二维插值
+        # Mesh: 2D interpolation
         pilot_sc, pilot_sym = np.where(mask)
         H_pilot = qamdata[pilot_sc, pilot_sym] / rv_down[pilot_sc, pilot_sym]
         H_real = _interp2d(pilot_sc, pilot_sym, H_pilot.real, carrierno1, datano, fill_value=1.0)
@@ -400,10 +400,10 @@ def estimate_channel_from_pilots(rv_down: np.ndarray,
 def phase_recovery_from_pilots(Rx: np.ndarray,
                                Tx: np.ndarray,
                                mask: np.ndarray) -> tuple:
-    """利用导频做相位恢复.
+    """Use pilots for phase recovery.
 
-    - 梳状导频：每符号一维频率插值
-    - 网状导频：二维时频插值
+    - Comb pilots: 1D frequency interpolation per symbol
+    - Mesh pilots: 2D time-frequency interpolation
     """
     carrierno1, datano = Rx.shape
     all_freqs = np.arange(carrierno1)
@@ -430,15 +430,15 @@ def phase_recovery_from_pilots(Rx: np.ndarray,
 
 
 # -----------------------------------------------------------------------------
-# 预均衡权重生成 (port from MATLAB Pre.m, 输出 th7.txt)
+# Pre-emphasis weight generation (port from MATLAB Pre.m, outputs th7.txt)
 # -----------------------------------------------------------------------------
 def _exp2_fit(y: np.ndarray) -> np.ndarray:
-    """对序列做双指数拟合 a*exp(b*x)+c*exp(d*x) (等效 MATLAB cftool 'exp2').
+    """Double-exponential fit a*exp(b*x)+c*exp(d*x) for a sequence (equivalent to MATLAB cftool 'exp2').
 
-    与 createFit.m 一致: x 取 1..N。若拟合失败则退化为 3 次平滑样条。
+    Consistent with createFit.m: x is 1..N. If fitting fails, fall back to a cubic smoothing spline.
 
-    注: Pre.m 中 method 1-4 使用的 createFit_VLC / createFit_VLC_inverse
-    原始文件已不可考, 这里统一用相同的 exp2 模型等效。
+    Note: In Pre.m methods 1-4 the original createFit_VLC / createFit_VLC_inverse
+    files are no longer available; here we uniformly use the same exp2 model equivalent.
     """
     from scipy.interpolate import UnivariateSpline
     y = np.asarray(y, dtype=float).ravel()
@@ -460,18 +460,18 @@ def _exp2_fit(y: np.ndarray) -> np.ndarray:
 
 def bridge_t_ii_1(f_center: float, f_half: float, decay_max_db: float,
                   r_ref: float = 50.0) -> Tuple[float, float, float, float, float, float]:
-    """桥 T 均衡器 II 型设计 (port from MATLAB BridgeT_II_1.m).
+    """Bridge-T equalizer type-II design (port from MATLAB BridgeT_II_1.m).
 
     Args:
-        f_center: 最小衰减中心频率 (Hz)
-        f_half: 半衰减带宽 (Hz)
-        decay_max_db: 最大衰减 (dB)
-        r_ref: 参考阻抗 (Ohm)
+        f_center: center frequency of minimum attenuation (Hz)
+        f_half: half-attenuation bandwidth (Hz)
+        decay_max_db: maximum attenuation (dB)
+        r_ref: reference impedance (Ohm)
 
     Returns:
-        (C11, L11, R11, C22, L22, R22), 其中 C 单位为 pF, L 单位为 nH (与 MATLAB 一致)
+        (C11, L11, R11, C22, L22, R22), where C is in pF and L is in nH (consistent with MATLAB)
     """
-    Fref = 1e6  # 归一化参考频率 1 MHz
+    Fref = 1e6  # Normalization reference frequency 1 MHz
     Fcen_norm = f_center / Fref
     Fhalf_norm = f_half / Fref
 
@@ -507,12 +507,12 @@ def hardware_pre_response_db(fbegin: int = config.HW_PRE_FBEGIN,
                              fhalf_mhz: float = config.HW_PRE_FHALF_MHZ,
                              fend: int = config.HW_PRE_FEND,
                              r0: float = config.HW_PRE_R0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """计算桥 T 硬件预均衡的 dB 响应 (port from Pre.m case 5).
+    """Compute the dB response of the Bridge-T hardware pre-equalizer (port from Pre.m case 5).
 
     Returns:
-        f_mhz: 1..1000 MHz 频点
-        b_log: 全频段 (1 MHz-1 GHz, 1 MHz 步进) 的衰减响应 (dB, 负值)
-        f_use: 截取的有效频段 b_log(fbegin : fbegin+fend) (MATLAB 1 基索引)
+        f_mhz: frequency points 1..1000 MHz
+        b_log: attenuation response (dB, negative) for the full band (1 MHz-1 GHz, 1 MHz step)
+        f_use: extracted useful band b_log(fbegin : fbegin+fend) (MATLAB 1-based indexing)
     """
     C11, L11, R11, _, _, _ = bridge_t_ii_1(fcen_mhz * 1e6, fhalf_mhz * 1e6, adb, r0)
     L_H = L11 * 1e-9   # nH -> H
@@ -520,11 +520,11 @@ def hardware_pre_response_db(fbegin: int = config.HW_PRE_FBEGIN,
 
     f = np.arange(1e6, 1e9 + 1, 1e6)  # 1M:1M:1G
     w = 2 * np.pi * f
-    x11 = 1j * w * L_H + 1 / (1j * w * C_F)   # 串联 LC 阻抗
-    z11 = R11 * x11 / (R11 + x11)             # R11 与串联 LC 并联
+    x11 = 1j * w * L_H + 1 / (1j * w * C_F)   # series LC impedance
+    z11 = R11 * x11 / (R11 + x11)             # R11 in parallel with series LC
     b_line = np.abs((1 + z11 / r0) ** 2)
     b_log = -10 * np.log10(b_line)
-    # MATLAB: f_use = b_log(Fbegin : Fbegin+Fend)  (1 基索引, 共 Fend+1 点)
+    # MATLAB: f_use = b_log(Fbegin : Fbegin+Fend) (1-based indexing, Fend+1 points total)
     f_use = b_log[fbegin - 1: fbegin + fend]
     return f / 1e6, b_log, f_use
 
@@ -537,30 +537,30 @@ def generate_preemphasis_weights(channel_mag: Optional[np.ndarray] = None,
                                  n_subcarriers: Optional[int] = None,
                                  save_path: Path = config.TH7_FILE,
                                  save_curves: bool = True) -> np.ndarray:
-    """生成每个子载波的预均衡幅度权重并保存到 th7.txt (port from MATLAB Pre.m).
+    """Generate per-subcarrier pre-emphasis amplitude weights and save to th7.txt (port from MATLAB Pre.m).
 
     Args:
-        channel_mag: 信道幅度响应 |ha| (如 dmt_receiver 输出 channel_response 的幅度;
-                     多通道测量时可先求和, 对应 Pre.m 中 temp=ha2+ha3+ha4)。
-                     method 0-4 必须提供; method 5 仅用其长度, 缺省时用 n_subcarriers。
+        channel_mag: channel magnitude response |ha| (e.g. magnitude of dmt_receiver output channel_response;
+                     for multi-channel measurements, sum first, corresponding to temp=ha2+ha3+ha4 in Pre.m).
+                     Required for methods 0-4; for method 5 only its length is used, defaulting to n_subcarriers.
         method: 0=normal fit; 1=inverse+normal; 2=cut off; 3=peak point;
-                4=peak point fit; 5=Hardware Pre (桥T均衡器响应)
-        equal_db: 截止/分段门限 (dB)
-        equal_db2: 第二门限 (仅 method=4)
-        hw_params: method=5 的硬件参数, 可覆盖 config 中 HW_PRE_* 键:
+                4=peak point fit; 5=Hardware Pre (Bridge-T equalizer response)
+        equal_db: cutoff/segmentation threshold (dB)
+        equal_db2: second threshold (only for method=4)
+        hw_params: hardware parameters for method=5, can override HW_PRE_* keys in config:
                    fbegin, adb, fcen_mhz, fhalf_mhz, fend, r0
-        n_subcarriers: 未提供 channel_mag 时的权重长度 (默认 config.CARRIERNO1)
-        save_path: th7.txt 保存路径
-        save_curves: method=5 时是否同时保存 f_grid.txt / f_hardware_dB.txt
+        n_subcarriers: weight length when channel_mag is not provided (default config.CARRIERNO1)
+        save_path: th7.txt save path
+        save_curves: whether to also save f_grid.txt / f_hardware_dB.txt for method=5
 
     Returns:
-        temp3: 长度等于子载波数的线性幅度权重 (与 th7.txt 内容一致)
+        temp3: linear amplitude weights with length equal to the number of subcarriers (same as th7.txt content)
     """
     if channel_mag is not None:
         temp = np.asarray(channel_mag, dtype=float).ravel()
     else:
         n = n_subcarriers or config.CARRIERNO1
-        temp = np.ones(n)  # 仅占位, method=5 只需长度
+        temp = np.ones(n)  # placeholder only; method=5 just needs the length
     N = len(temp)
 
     hw = {
@@ -578,24 +578,24 @@ def generate_preemphasis_weights(channel_mag: Optional[np.ndarray] = None,
         return d - (d[0] if ref == "first" else d[-1])
 
     def _cutoff_index(d: np.ndarray, thr: float) -> int:
-        """MATLAB: temp_index=find(d<-thr); count_index=temp_index(1)+1 (1 基)."""
+        """MATLAB: temp_index=find(d<-thr); count_index=temp_index(1)+1 (1-based)."""
         idx = np.flatnonzero(d < -thr)
         return int(idx[0]) + 1 if len(idx) else N
 
     if method == 0:
-        # normal: exp2 拟合信道响应后开平方
+        # normal: exp2 fit channel response then square root
         temp2 = _exp2_fit(temp)
         temp3 = temp2 ** 0.5
 
     elif method == 1:
-        # inverse+normal: 对归一化到末端的逆响应 (dB) 拟合
+        # inverse+normal: fit inverse response normalized to the end (dB)
         d = _inverse_db(temp, ref="end")
         temp2 = _exp2_fit(d)
         temp2 = 1.0 / (10.0 ** (temp2 / 20))
         temp3 = np.sqrt(np.abs(temp2))
 
     elif method == 2:
-        # cut off: 仅拟合 -equal_db 门限以上部分, 其余补最小值
+        # cut off: fit only the part above the -equal_db threshold, pad the rest with minimum
         d = _inverse_db(temp, ref="first")
         count_index = _cutoff_index(d, equal_db)
         temp2 = _exp2_fit(temp[:count_index])
@@ -604,7 +604,7 @@ def generate_preemphasis_weights(channel_mag: Optional[np.ndarray] = None,
         temp3 = np.concatenate([temp3, pad])
 
     elif method == 3:
-        # peak point: 拟合逆响应, 以门限点为界分段开 5/8 与 1/8 次方
+        # peak point: fit inverse response, raise to 5/8 and 1/8 powers on each side of the threshold
         d = _inverse_db(temp, ref="first")
         count_index = _cutoff_index(d, equal_db)
         temp2 = _exp2_fit(d)
@@ -614,18 +614,18 @@ def generate_preemphasis_weights(channel_mag: Optional[np.ndarray] = None,
                                 temp2[count_index - 1:] ** (1 / 8)])
 
     elif method == 4:
-        # peak point fit: 在拟合曲线上找门限点, 分段开 6/8 与 1/100 次方
+        # peak point fit: find threshold on fitted curve, raise to 6/8 and 1/100 powers on each side
         d = _inverse_db(temp, ref="first")
         temp2_db = _exp2_fit(d)
         count_index = _cutoff_index(temp2_db, equal_db)
-        _cutoff_index(temp2_db, equal_db2)  # 与 MATLAB 一致仅作诊断
+        _cutoff_index(temp2_db, equal_db2)  # diagnostic only, consistent with MATLAB
         temp2 = 1.0 / (10.0 ** (temp2_db / 20))
         temp2 = temp2 / temp2[count_index - 1]
         temp3 = np.concatenate([temp2[:count_index - 1] ** (6 / 8),
                                 temp2[count_index - 1:] ** (1 / 100)])
 
     elif method == 5:
-        # Hardware Pre: 桥 T 均衡器 dB 响应样条插值到子载波数
+        # Hardware Pre: spline-interpolate Bridge-T equalizer dB response to number of subcarriers
         f_mhz, b_log, f_use = hardware_pre_response_db(**hw)
         idx_src = np.arange(1, len(f_use) + 1, dtype=float)
         idx_dst = np.linspace(1, len(f_use), N)
@@ -648,7 +648,7 @@ def generate_preemphasis_weights(channel_mag: Optional[np.ndarray] = None,
 
 
 # -----------------------------------------------------------------------------
-# DMT 调制
+# DMT modulation
 # -----------------------------------------------------------------------------
 def generate_dmt_tx(RQ: np.ndarray,
                     S: np.ndarray,
@@ -656,10 +656,10 @@ def generate_dmt_tx(RQ: np.ndarray,
                     constellation: str,
                     cfg: Optional[dict] = None,
                     seed: int = config.RANDOM_SEED) -> dict:
-    """生成 DMT 发送波形.
+    """Generate the DMT transmit waveform.
 
     Returns:
-        dict 包含:
+        dict containing:
             tx_waveform, qamdata, AVT, origin_dec_data, origin_binary,
             data_final, dataIQ, dataifft1
     """
@@ -708,7 +708,7 @@ def generate_dmt_tx(RQ: np.ndarray,
 
         qamdata[n, :] = qamdata[n, :] / AVT[n, :]
 
-    # 插入导频
+    # Insert pilots
     pilot_pattern = cfg.get("pilot_pattern", config.PILOT_PATTERN)
     pilot_value = cfg.get("pilot_value", config.PILOT_VALUE)
     pilot_kwargs = {
@@ -723,7 +723,7 @@ def generate_dmt_tx(RQ: np.ndarray,
         qamdata, AVT, origin_dec_data, pilot_mask, pilot_value
     )
 
-    # Hermitian 共轭对称
+    # Hermitian conjugate symmetry
     data_final = np.zeros((carrierno, datano), dtype=complex)
     data_final[zeropad1:carrierno // 2, :] = qamdata
     data_final[carrierno // 2 + 1:carrierno - zeropad1 + 1, :] = np.conj(np.flipud(qamdata))
@@ -742,19 +742,19 @@ def generate_dmt_tx(RQ: np.ndarray,
 
     data1 = np.real(dataifft1.reshape(-1, order="F").copy())
 
-    # 输出未加 dummy 的波形（用于同步）
+    # Output waveform without dummy (used for synchronization)
     dataout = center_normalize(data1)
 
-    # 加 dummy 并再次归一化
+    # Add dummy and normalize again
     data1_with_dummy, dummy = add_dummy(data1, base=64)
     waveform_dummy_len = len(dummy)
     data1_with_dummy = center_normalize(data1_with_dummy)
 
-    # 硬件预均衡
+    # Hardware pre-equalization
     if pre_equ_flag == 3:
         th7_path = Path(cfg.get("th7_file", config.TH7_FILE))
         if not th7_path.exists():
-            # th7.txt 不存在时按 config.PRE_METHOD 自动生成 (port of MATLAB Pre.m)
+            # Auto-generate with config.PRE_METHOD when th7.txt does not exist (port of MATLAB Pre.m)
             print(f"{th7_path} not found, generating with PRE_METHOD={config.PRE_METHOD}")
             generate_preemphasis_weights(
                 channel_mag=cfg.get("channel_mag", None),
@@ -769,7 +769,7 @@ def generate_dmt_tx(RQ: np.ndarray,
                                         th7_path)
         data_pre, dummy = add_dummy(data_pre, base=64)
         data_pre = center_normalize(data_pre)
-        # 功率归一化
+        # Power normalization
         data_pre = data_pre / np.sqrt(np.mean(np.abs(data_pre) ** 2))
     else:
         data_pre = None
@@ -797,7 +797,7 @@ def generate_dmt_tx(RQ: np.ndarray,
 
 def generate_qpsk_tx(datano: int = config.DATANO_QPSK,
                      cfg: Optional[dict] = None) -> dict:
-    """生成 QPSK 探测波形 (STEP1)."""
+    """Generate QPSK probe waveform (STEP1)."""
     cfg = cfg or {}
     carrierno1 = cfg.get("carrierno1", config.CARRIERNO1)
     RQ = np.full(carrierno1, 2, dtype=int)
@@ -809,7 +809,7 @@ def generate_bitloading_tx(snrs: np.ndarray,
                            constellation: str = config.CONSTELLATION_QAM,
                            datano: int = config.DATANO_BPL,
                            cfg: Optional[dict] = None) -> dict:
-    """生成 bitloading 波形 (STEP3)."""
+    """Generate bitloading waveform (STEP3)."""
     cfg = cfg or {}
     snrs = np.asarray(snrs).ravel()
     carrierno1 = cfg.get("carrierno1", config.CARRIERNO1)
@@ -829,7 +829,7 @@ def generate_bitloading_tx(snrs: np.ndarray,
         SE_add = raise_num - ratio
         S, RQ = bit_loading_lc(snrs, qam_order_all, snr_table, SE_add=SE_add)
 
-    # comb 导频的子载波全部用于传已知导频，不再承载数据
+    # Comb-pilot subcarriers are all used for known pilots and no longer carry data
     pattern = cfg.get("pilot_pattern", config.PILOT_PATTERN)
     if pattern == "comb":
         from dmt_core import create_pilot_mask
@@ -856,17 +856,17 @@ def generate_bitloading_tx(snrs: np.ndarray,
 
 
 # -----------------------------------------------------------------------------
-# DMT 接收
+# DMT reception
 # -----------------------------------------------------------------------------
 def phase_recovery(Rx: np.ndarray, Tx: np.ndarray,
                    carriernum: int, symnum: int,
                    start: int = 50) -> Tuple[np.ndarray, np.ndarray]:
-    """相位恢复（兼容 bit-loading 的空子载波）。
+    """Phase recovery (compatible with null subcarriers in bit-loading).
 
-    Bit-loading 时 RQ=0 的子载波对应 Tx=0，不能直接使用 Rx/Tx 计算相位。
-    这里只使用实际发送了非零参考符号的有效子载波估计相位：
+    In bit-loading, subcarriers with RQ=0 correspond to Tx=0, so phase cannot be computed directly from Rx/Tx.
+    Here phase is estimated only using active subcarriers that actually transmitted non-zero reference symbols:
         angle(Rx * conj(Tx)) == angle(Rx / Tx)  (Tx != 0)
-    这样可以避免 0/0 或 nonzero/0 产生 NaN/Inf，继而导致 polyfit/SVD 崩溃。
+    This avoids 0/0 or nonzero/0 producing NaN/Inf, which would crash polyfit/SVD.
     """
     Rx = np.asarray(Rx).reshape(carriernum, symnum)
     Tx = np.asarray(Tx).reshape(carriernum, symnum)
@@ -902,10 +902,10 @@ def phase_recovery(Rx: np.ndarray, Tx: np.ndarray,
             y[:, t] = 0.0
             continue
 
-        # 先解缠，避免 +pi/-pi 跳变破坏线性拟合。
+        # Unwrap first to avoid +/-pi jumps breaking the linear fit
         phase_valid = np.unwrap(phase_valid)
 
-        # 对空子载波位置只做插值以得到连续相位轨迹；真正拟合仍使用有效载波。
+        # Only interpolate at null subcarrier positions to obtain a continuous phase trajectory; actual fitting still uses valid carriers
         phase_interp = np.interp(carrier_idx, idx.astype(float), phase_valid)
         if carriernum >= 3:
             phase_interp = smooth(phase_interp, window_len=min(20, carriernum))
@@ -923,7 +923,7 @@ def phase_recovery(Rx: np.ndarray, Tx: np.ndarray,
         fitcurve = np.polyfit(n, nn, 1)
         y[:, t] = np.polyval(fitcurve, carrier_idx)
 
-    # 保留原程序的时间方向处理：由首/末符号的频率相位斜率线性插值。
+    # Keep original time-direction processing: linearly interpolate frequency phase slope between first/last symbols
     y_new = np.zeros((carriernum, symnum), dtype=float)
     y1 = y[:, 0]
     y2 = y[:, -1]
@@ -935,14 +935,14 @@ def phase_recovery(Rx: np.ndarray, Tx: np.ndarray,
 
 
 def smooth(x: np.ndarray, window_len: int = 11) -> np.ndarray:
-    """滑动平均平滑，与 MATLAB smooth(.,window_len) 近似."""
+    """Moving-average smoothing, approximating MATLAB smooth(.,window_len)."""
     x = np.asarray(x).ravel()
     if window_len < 3:
         return x
     s = np.r_[x[window_len - 1:0:-1], x, x[-2:-window_len - 1:-1]]
     w = np.ones(window_len) / window_len
     y = np.convolve(s, w, mode="valid")
-    # 让输出长度与输入一致
+    # Make output length equal to input
     pad = window_len // 2
     return y[pad:pad + len(x)]
 
@@ -950,15 +950,15 @@ def smooth(x: np.ndarray, window_len: int = 11) -> np.ndarray:
 def dmt_receiver(rx_waveform: np.ndarray,
                  tx_dict: dict,
                  cfg: Optional[dict] = None) -> dict:
-    """DMT 接收处理.
+    """DMT reception processing.
 
     Args:
-        rx_waveform: 接收到的时域波形 (1-D)
-        tx_dict: generate_dmt_tx 的输出字典
-        cfg: 配置
+        rx_waveform: received time-domain waveform (1-D)
+        tx_dict: output dict from generate_dmt_tx
+        cfg: configuration
 
     Returns:
-        dict 包含 out2(均衡并恢复相位后的频域符号), in(参考), SNR 等
+        dict containing out2 (equalized and phase-recovered frequency-domain symbols), in (reference), SNR, etc.
     """
     cfg = cfg or {}
     carrierno = cfg.get("carrierno", config.CARRIERNO)
@@ -971,12 +971,12 @@ def dmt_receiver(rx_waveform: np.ndarray,
 
     rx_waveform = np.asarray(rx_waveform).ravel()
 
-    # 去掉 dummy
+    # Remove dummy
     dummy_len = tx_dict["waveform_dummy_len"]
     if dummy_len > 0:
         rx_waveform = rx_waveform[:-dummy_len]
 
-    # .reshape 成符号矩阵
+    # Reshape into symbol matrix
     sym_len = (carrierno + cp) * upsampleno
     dataRx = rx_waveform[:sym_len * datano].reshape(sym_len, datano, order="F")
     rv_tifft = dataRx[cp * upsampleno:, :]
@@ -988,8 +988,8 @@ def dmt_receiver(rx_waveform: np.ndarray,
     pilot_mask = tx_dict.get("pilot_mask", np.zeros((carrierno1, datano), dtype=bool))
     use_pilots = pilot_mask.any()
 
-    # Bit-loading 中 RQ=0 表示该子载波不承载数据。
-    # 后续的信道估计、SNR 和 BER 统计均使用同一 active_carrier 掩码。
+    # In bit-loading RQ=0 means the subcarrier carries no data.
+    # Channel estimation, SNR and BER statistics below all use the same active_carrier mask.
     RQ = tx_dict.get("RQ", None)
     if RQ is not None:
         rq_arr = np.asarray(RQ).ravel()
@@ -1000,17 +1000,17 @@ def dmt_receiver(rx_waveform: np.ndarray,
         active_carrier = np.any(np.abs(in_ref) > 1e-12, axis=1)
 
     if use_pilots:
-        # 导频辅助信道估计
+        # Pilot-aided channel estimation
         H = estimate_channel_from_pilots(out, in_ref, pilot_mask)
         out2 = out * H
         out2_temp = out2.copy()
-        # 导频辅助相位恢复
+        # Pilot-aided phase recovery
         Rx_recovery, _ = phase_recovery_from_pilots(out2, in_ref, pilot_mask)
         ha = np.mean(H, axis=1)
     else:
-        # 传统 training symbol 信道估计。
-        # 不能直接 in_ref/out：RQ=0 时 in_ref=0，可能产生 0/0 -> NaN，
-        # 随后的频率平滑又会把 NaN 扩散到相邻有效子载波。
+        # Traditional training-symbol channel estimation.
+        # Cannot use in_ref/out directly: when RQ=0, in_ref=0, which can produce 0/0 -> NaN,
+        # and subsequent frequency smoothing will spread NaN to adjacent active subcarriers.
         tx_train = in_ref[:, :trainingno]
         rx_train = out[:, :trainingno]
         h1 = np.full(tx_train.shape, np.nan + 1j * np.nan, dtype=complex)
@@ -1035,7 +1035,7 @@ def dmt_receiver(rx_waveform: np.ndarray,
                 np.sum(h1_zeroed[good_rows], axis=1) / count_h1[good_rows]
             )
 
-        # 为了进行频率方向平滑，仅在空子载波位置插值信道系数。
+        # For frequency-direction smoothing, interpolate channel coefficients only at null subcarrier positions
         valid_h = active_carrier & np.isfinite(ha_raw.real) & np.isfinite(ha_raw.imag)
         valid_idx = np.flatnonzero(valid_h)
         carrier_idx = np.arange(carrierno1)
@@ -1047,25 +1047,25 @@ def dmt_receiver(rx_waveform: np.ndarray,
         elif valid_idx.size == 1:
             ha_fill = np.full(carrierno1, ha_raw[valid_idx[0]], dtype=complex)
         else:
-            # 极端情况下没有可用 training symbol，保持单位信道，避免产生 NaN。
+            # In the extreme case of no available training symbols, keep unit channel to avoid NaN
             ha_fill = np.ones(carrierno1, dtype=complex)
 
         ha = smooth(ha_fill, window_len=7)
         H = np.tile(ha, (datano, 1)).T
         out2 = out * H
         out2_temp = out2.copy()
-        # 相位恢复（内部会自动跳过 RQ=0 / Tx=0 的子载波）
+        # Phase recovery (internally skips RQ=0 / Tx=0 subcarriers)
         Rx_recovery, _ = phase_recovery(out2, in_ref, carrierno1, datano, start=50)
 
-    # 反归一化
+    # Denormalize
     AVT = tx_dict["AVT"]
     in_denorm = in_ref * AVT
     out2_denorm = Rx_recovery * AVT
     out3 = out2_temp * AVT
 
     # ------------------------------------------------------------------
-    # SNR：只统计真正承载数据的 active_carrier，并跳过导频位置。
-    # MATLAB 定义：SNR = mean(|Tx|^2) / mean(|Rx-Tx|^2) = 1/EVM^2
+    # SNR: count only active carriers that really carry data, and skip pilot positions.
+    # MATLAB definition: SNR = mean(|Tx|^2) / mean(|Rx-Tx|^2) = 1/EVM^2
     # ------------------------------------------------------------------
     SNR_R = np.full(carrierno1, np.nan, dtype=float)
     for n in range(carrierno1):
@@ -1088,13 +1088,13 @@ def dmt_receiver(rx_waveform: np.ndarray,
         if not np.isfinite(sig_pow) or sig_pow <= 1e-15:
             continue
         if not np.isfinite(err_pow) or err_pow <= 1e-15:
-            # 理想的零误差对应无限 SNR；这里保留 NaN，不用任意 1e12 污染平均值。
+            # Ideal zero error corresponds to infinite SNR; keep NaN here instead of polluting the average with arbitrary 1e12
             continue
 
         SNR_R[n] = sig_pow / err_pow
 
-    # 只对“有效但偶发估计失败”的数据子载波做最近邻补值。
-    # RQ=0 的空子载波始终保持 NaN，不再参与平均 SNR。
+    # Nearest-neighbor fill only for active data subcarriers that occasionally fail estimation.
+    # Null subcarriers with RQ=0 always remain NaN and do not participate in average SNR.
     valid_snr_idx = np.where(active_carrier & np.isfinite(SNR_R) & (SNR_R > 0))[0]
     missing_active_idx = np.where(active_carrier & ~np.isfinite(SNR_R))[0]
     if len(valid_snr_idx) > 0:
@@ -1103,7 +1103,7 @@ def dmt_receiver(rx_waveform: np.ndarray,
             SNR_R[n] = SNR_R[nearest]
 
     # ------------------------------------------------------------------
-    # 硬判决解调 + 实测 BER/SER（跳过 RQ=0 和导频位置）
+    # Hard-decision demodulation + measured BER/SER (skip RQ=0 and pilot positions)
     # ------------------------------------------------------------------
     rx_dec = np.zeros_like(in_denorm, dtype=int)
     bit_errors_total = 0
@@ -1139,15 +1139,15 @@ def dmt_receiver(rx_waveform: np.ndarray,
         tx_dec = tx_dict["origin_dec_data"][n, valid].astype(np.uint16)
         rx_dec_valid = dec[valid].astype(np.uint16)
 
-        # 符号错误数
+        # Symbol error count
         err_sym = int(np.count_nonzero(rx_dec_valid != tx_dec))
         ser_per_carrier[n] = err_sym / n_valid
         symbol_errors_total += err_sym
         symbols_total += n_valid
 
-        # 比特错误数：发送端将 bits 个比特按 MSB-first 转为十进制符号编号。
-        # XOR 后所有差异都位于整数的低 bits 位。
-        # 原代码 np.unpackbits(... )[:, :bits] 取到了高位，因此会把真实错误误判为 0。
+        # Bit error count: transmitter converts bits bits MSB-first into a decimal symbol index.
+        # After XOR all differences lie in the low bits of the integer.
+        # The original code np.unpackbits(... )[:, :bits] took the high bits, thus misclassifying real errors as 0.
         diff = np.bitwise_xor(rx_dec_valid, tx_dec)
         bit_errs = 0
         for k in range(bits):
@@ -1178,16 +1178,16 @@ def dmt_receiver(rx_waveform: np.ndarray,
 def estimate_snr_per_carrier(rx_waveform: np.ndarray,
                              tx_dict: dict,
                              cfg: Optional[dict] = None) -> np.ndarray:
-    """QPSK 探测后估计每个子载波的 SNR (STEP2)."""
+    """Estimate per-carrier SNR after QPSK probing (STEP2)."""
     res = dmt_receiver(rx_waveform, tx_dict, cfg=cfg)
     return res["SNR_R"]
 
 
 # -----------------------------------------------------------------------------
-# BER 估计
+# BER estimation
 # -----------------------------------------------------------------------------
 def gray_neighbor_cal(order: int, flag: int = 0) -> Tuple[float, float]:
-    """Gray 邻居近似（简化）."""
+    """Gray neighbor approximation (simplified)."""
     bits = int(np.log2(order))
     if flag == 0:
         return max(1.0, bits * 0.8), float(order)
@@ -1195,7 +1195,7 @@ def gray_neighbor_cal(order: int, flag: int = 0) -> Tuple[float, float]:
 
 
 def ber_est_by_snr(snr: float, qam_order: int, flag: int = 1, noise_var: float = 1.0) -> float:
-    """由 SNR 估计 BER (port from MATLAB BER_est_by_SNR.m)."""
+    """Estimate BER from SNR (port from MATLAB BER_est_by_SNR.m)."""
     bits = int(np.log2(qam_order))
     L = int(np.ceil(np.sqrt(qam_order)))
     if flag == 1:
