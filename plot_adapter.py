@@ -1,11 +1,11 @@
-"""CodePlot v5 plotting adapter.
+"""CodePlot v5 绘图适配器。
 
-Saves plotting data and editable CodePlot v5 scripts for each test,
-and displays figures directly in Spyder.
+为每次测试保存绘图数据和可编辑的 CodePlot v5 脚本，
+并直接在 Spyder 中显示图形。
 
-Each complete test generates under data/codeplot_assets/<run_id>/:
-    data/      : *.npz data for each figure
-    scripts/   : *.py script for each figure (can be opened with codeplot_v5.py)
+每次完整测试会在 data/codeplot_assets/<run_id>/ 下生成：
+    data/      : 每个图对应的 *.npz 数据
+    scripts/   : 每个图对应的 *.py 脚本（可用 codeplot_v5.py 打开）
 """
 import json
 import numpy as np
@@ -21,7 +21,7 @@ CODEPLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _prepare_dirs(run_id: str):
-    """Return the base, data, and scripts directories for this test."""
+    """返回本次测试的基目录、数据目录和脚本目录。"""
     base = CODEPLOT_DIR / run_id
     data_dir = base / "data"
     script_dir = base / "scripts"
@@ -31,17 +31,17 @@ def _prepare_dirs(run_id: str):
 
 
 def _save_data(data_dir: Path, name: str, **arrays):
-    """Save arrays as an NPZ file."""
+    """将数组保存为 NPZ 文件。"""
     np.savez(data_dir / f"{name}.npz", **arrays)
 
 
 def _write_script(script_dir: Path, name: str, code: str):
-    """Write a CodePlot v5 loadable script."""
+    """写入可由 CodePlot v5 加载的脚本。"""
     (script_dir / f"{name}.py").write_text(code, encoding="utf-8")
 
 
 def _render_figure(script_code: str, script_path: Path, dpi: int = None):
-    """Execute the script and return the Figure object."""
+    """执行脚本并返回 Figure 对象。"""
     if dpi is None:
         dpi = config.PLOT_DPI
     fig = plt.figure(dpi=dpi)
@@ -52,14 +52,14 @@ def _render_figure(script_code: str, script_path: Path, dpi: int = None):
 
 
 def _display(script_code: str, script_path: Path):
-    """Display the figure in Spyder (the script uses the external fig variable)."""
+    """在 Spyder 中显示图形（脚本使用外部的 fig 变量）。"""
     _render_figure(script_code, script_path)
     plt.show()
 
 
 def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Template,
                       script_vars: dict):
-    """Generic: save data, write script, save image/metadata, and display."""
+    """通用流程：保存数据、写入脚本、保存图像/元数据并显示。"""
     base, data_dir, script_dir = _prepare_dirs(run_id)
     _save_data(data_dir, name, **arrays)
     script_vars = dict(script_vars)
@@ -68,10 +68,10 @@ def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Tem
     script_path = script_dir / f"{name}.py"
     _write_script(script_dir, name, script_code)
 
-    # Render once for saving and/or display
+    # 渲染一次，用于保存和/或显示
     fig = _render_figure(script_code, script_path)
 
-    # Save PNG image and metadata to data/plots/<run_id>/
+    # 将 PNG 图像和元数据保存到 data/plots/<run_id>/
     if config.PLOT_SAVE:
         plot_dir = config.PLOT_DIR / run_id
         plot_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +98,7 @@ def _save_and_display(run_id: str, name: str, arrays: dict, script_template: Tem
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Script templates
+# 脚本模板
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _TIME_TEMPLATE = Template("""import numpy as np
@@ -111,8 +111,8 @@ sig = data["sig"]
 ax = fig.add_subplot(111)
 ax.plot(t, sig, "b.-", linewidth=1, markersize=2)
 ax.set_title("$title")
-ax.set_xlabel("Sample")
-ax.set_ylabel("Amplitude")
+ax.set_xlabel("采样点")
+ax.set_ylabel("幅度")
 ax.grid(True, alpha=0.3)
 fig.tight_layout()
 """)
@@ -127,14 +127,14 @@ fs = float(data["fs"])
 
 n = len(sig)
 freqs = np.fft.fftshift(np.fft.fftfreq(n, d=1.0 / fs))
-# Consistent with MATLAB: 10*log10(abs(fft(sig)))
+# 与 MATLAB 保持一致：10*log10(abs(fft(sig)))
 spec = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(sig))) + 1e-12)
 
 ax = fig.add_subplot(111)
 ax.plot(freqs / 1e9, spec, "b-", linewidth=1)
 ax.set_title("$title")
-ax.set_xlabel("Frequency (GHz)")
-ax.set_ylabel("Magnitude (dB)")
+ax.set_xlabel("频率 (GHz)")
+ax.set_ylabel("幅度 (dB)")
 ax.grid(True, alpha=0.3)
 fig.tight_layout()
 """)
@@ -165,10 +165,10 @@ est = 10 * np.log10(np.maximum(data["est"].astype(float), 1e-12))
 real = 10 * np.log10(np.maximum(data["real"].astype(float), 1e-12))
 
 ax = fig.add_subplot(111)
-ax.plot(est, "b", label="Est-SNR", marker="o", markersize=3, linewidth=1)
-ax.plot(real, "r", label="TestReal-SNR", marker="x", markersize=3, linewidth=1)
+ax.plot(est, "b", label="估计信噪比", marker="o", markersize=3, linewidth=1)
+ax.plot(real, "r", label="实测信噪比", marker="x", markersize=3, linewidth=1)
 ax.set_title("$title")
-ax.set_xlabel("Subcarrier")
+ax.set_xlabel("子载波")
 ax.set_ylabel("SNR (dB)")
 ax.legend()
 ax.grid(True, alpha=0.3)
@@ -186,18 +186,18 @@ rx = data["rx"]
 ax = fig.add_subplot(111)
 if len(tx) > 5000:
     hb = ax.hexbin(tx, rx, gridsize=30, cmap="GnBu", mincnt=1)
-    fig.colorbar(hb, ax=ax, label="Density")
+    fig.colorbar(hb, ax=ax, label="密度")
 else:
     ax.plot(tx, rx, "b.", alpha=0.2, markersize=3)
 
 if np.any(tx):
     gain = np.sum(tx * rx) / np.sum(tx ** 2)
     t = np.linspace(tx.min(), tx.max(), 100)
-    ax.plot(t, gain * t, "g--", linewidth=2, label=f"Linear fit (gain={gain:.3f})")
+    ax.plot(t, gain * t, "g--", linewidth=2, label=f"线性拟合 (增益={gain:.3f})")
 
 ax.set_title("$title")
-ax.set_xlabel("TX Amplitude")
-ax.set_ylabel("RX Amplitude")
+ax.set_xlabel("发送端幅度")
+ax.set_ylabel("接收端幅度")
 ax.legend()
 ax.grid(True, alpha=0.3)
 fig.tight_layout()
@@ -218,19 +218,19 @@ rate_gbps = float(data["rate_gbps"])
 ax1 = fig.add_subplot(211)
 ax1_bits = ax1.twinx()
 ax1.plot(subcarriers, snrs_db, "b-", linewidth=1.5, label="SNR (dB)")
-ax1_bits.plot(subcarriers, RQ, "r-", linewidth=1.5, marker="x", markersize=3, label="Bit allocation")
+ax1_bits.plot(subcarriers, RQ, "r-", linewidth=1.5, marker="x", markersize=3, label="比特分配")
 ax1.set_ylabel("SNR (dB)", color="b")
-ax1_bits.set_ylabel("Bits / symbol", color="r")
-ax1.set_title(f"Bit-Power Loading (ratio={ratio}, rate={rate_gbps:.2f} Gbps)")
+ax1_bits.set_ylabel("比特 / 符号", color="r")
+ax1.set_title(f"比特-功率加载 (ratio={ratio}, 速率={rate_gbps:.2f} Gbps)")
 ax1.grid(True, alpha=0.3)
 lines1, labels1 = ax1.get_legend_handles_labels()
 lines2, labels2 = ax1_bits.get_legend_handles_labels()
 ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
 
 ax2 = fig.add_subplot(212, sharex=ax1)
-ax2.plot(subcarriers, S, "g-", linewidth=1.5, marker="o", markersize=2, label="Power allocation")
-ax2.set_xlabel("Subcarrier")
-ax2.set_ylabel("Power scaling")
+ax2.plot(subcarriers, S, "g-", linewidth=1.5, marker="o", markersize=2, label="功率分配")
+ax2.set_xlabel("子载波")
+ax2.set_ylabel("功率缩放")
 ax2.legend()
 ax2.grid(True, alpha=0.3)
 
@@ -250,20 +250,20 @@ carrier_idx = np.arange(len(ser))
 ax1 = fig.add_subplot(211)
 ax1.plot(carrier_idx, ser, "r-", marker="o", markersize=3, linewidth=1)
 ax1.set_ylabel("SER")
-ax1.set_title("Symbol Error Rate per Subcarrier")
+ax1.set_title("各子载波符号误码率")
 ax1.grid(True, alpha=0.3)
 
 ax2 = fig.add_subplot(212)
 ax2.semilogy(carrier_idx, np.where(ber > 0, ber, 1e-12), "b-", marker="x", markersize=3, linewidth=1)
-ax2.set_xlabel("Subcarrier Index")
+ax2.set_xlabel("子载波索引")
 ax2.set_ylabel("BER")
-ax2.set_title("Bit Error Rate per Subcarrier")
+ax2.set_title("各子载波比特误码率")
 ax2.grid(True, which="both", ls="--", alpha=0.3)
 
 if RQ is not None:
     ax2_twin = ax2.twinx()
-    ax2_twin.plot(carrier_idx, RQ, "g--", alpha=0.5, label="Bit allocation")
-    ax2_twin.set_ylabel("Bits / symbol", color="g")
+    ax2_twin.plot(carrier_idx, RQ, "g--", alpha=0.5, label="比特分配")
+    ax2_twin.set_ylabel("比特 / 符号", color="g")
     ax2_twin.legend(loc="upper right")
 
 fig.tight_layout()
@@ -302,7 +302,7 @@ for idx, bits in enumerate(orders):
 
     gridsize = max(60, 8 * int(2 ** (bits / 2)))
     hb = ax.hexbin(pts.real, pts.imag, gridsize=gridsize, cmap="GnBu", mincnt=1)
-    fig.colorbar(hb, ax=ax, label="Density")
+    fig.colorbar(hb, ax=ax, label="密度")
 
     ax.set_title(f"{2**bits}-QAM (bits={bits})")
     ax.set_xlabel("I")
@@ -310,7 +310,7 @@ for idx, bits in enumerate(orders):
     ax.axis("equal")
     ax.grid(True, alpha=0.3)
 
-fig.suptitle("Constellation Density by Modulation Order", y=1.02)
+fig.suptitle("按调制阶数划分的星座图密度", y=1.02)
 fig.tight_layout()
 """)
 
@@ -349,13 +349,13 @@ for idx, bits in enumerate(orders):
     ax.axis("equal")
     ax.grid(True, alpha=0.3)
 
-fig.suptitle("RX Constellation by Modulation Order", y=1.02)
+fig.suptitle("按调制阶数划分的接收星座图", y=1.02)
 fig.tight_layout()
 """)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Public API
+# 公共 API
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def plot_time_waveform(t, sig, title: str, run_id: str, name: str):

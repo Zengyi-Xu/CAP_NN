@@ -1,61 +1,60 @@
-# UW_APSK_CAP_PY — Python CAP Transceiver for Underwater Visible-Light Communication
+# UW_APSK_CAP_PY —— 面向水下可见光通信的 Python CAP 收发机
 
-This project ports the MATLAB UW_APSK CAP (Carrierless Amplitude Phase) transceiver
-to Python, reusing the engineering framework from `DMT_PY_NN`.
+本项目将 MATLAB 版 UW_APSK CAP（无载波幅度相位，Carrierless Amplitude Phase）收发机
+移植到 Python，复用 `DMT_PY_NN` 的工程框架。
 
-## Scope
+## 范围
 
-- **Single-band CAP** — ports `oldcapAPSKTxRx20220406.m`
-- **Multi-band CAP** — ports `main_CAP_3band_totalB.m`
-- **APSK/QAM constellations** — ports `GS_CCSDSmodulation_cons.m` / `GS_CCSDSdemodulation_cons.m`
-- **LMS / LMS+Volterra equalizers** — ports `LMS_1DownS_Testnan.m` / `LMS_volterra_1DownS_Testnan.m`
-- **VLC channel model** — ports `vlc_channel.m`
-- **NN post-equalizer** — ports the SCAP_DNNpy2 workflow (multi-band CAP DNN)
+- **单频带 CAP** —— 移植自 `oldcapAPSKTxRx20220406.m`
+- **多频带 CAP** —— 移植自 `main_CAP_3band_totalB.m`
+- **APSK/QAM 星座图** —— 移植自 `GS_CCSDSmodulation_cons.m` / `GS_CCSDSdemodulation_cons.m`
+- **LMS / LMS+Volterra 均衡器** —— 移植自 `LMS_1DownS_Testnan.m` / `LMS_volterra_1DownS_Testnan.m`
+- **VLC 信道模型** —— 移植自 `vlc_channel.m`
+- **NN 后均衡器** —— 移植自 SCAP_DNNpy2 工作流（多频带 CAP DNN）
 
-## File mapping
+## 文件对应关系
 
-| Python file | MATLAB source | Purpose |
+| Python 文件 | MATLAB 源文件 | 用途 |
 |---|---|---|
-| `constellation.py` | `GS_CCSDSmodulation_cons.m`, `GS_CCSDSdemodulation_cons.m` | APSK/QAM mapping/demapping |
-| `cap_core.py` | `CAPmod.m`, `cap_gen.m`, `shaping_fildes.m`, `Pulse_shaping_ZY.m` | CAP modulation, multi-band synthesis |
-| `cap_rx.py` | `CAPmatch_filter.m`, `mdb_match_filter.m` | CAP matched filter / demodulation |
-| `equalizer.py` | `LMS_1DownS_Testnan.m`, `LMS_volterra_1DownS_Testnan.m` | LMS and LMS+Volterra equalizers |
-| `channel.py` | `vlc_channel.m` | VLC channel + AWGN |
-| `config_cap.py` | — | CAP-specific parameters |
-| `main_cap.py` | — | CLI entry point |
-| `data/nn/CAP_multiband_NN.py` | `SCAP_DNNpy2` | PyTorch BiGRU post-equalizer |
-| `nn_cap_equalizer.py` | — | Subprocess wrapper for CAP NN |
+| `constellation.py` | `GS_CCSDSmodulation_cons.m`, `GS_CCSDSdemodulation_cons.m` | APSK/QAM 映射/解映射 |
+| `cap_core.py` | `CAPmod.m`, `cap_gen.m`, `shaping_fildes.m`, `Pulse_shaping_ZY.m` | CAP 调制、多频带合成 |
+| `cap_rx.py` | `CAPmatch_filter.m`, `mdb_match_filter.m` | CAP 匹配滤波 / 解调 |
+| `equalizer.py` | `LMS_1DownS_Testnan.m`, `LMS_volterra_1DownS_Testnan.m` | LMS 与 LMS+Volterra 均衡器 |
+| `channel.py` | `vlc_channel.m` | VLC 信道 + AWGN |
+| `config_cap.py` | — | CAP 专用参数 |
+| `main_cap.py` | — | 命令行入口 |
+| `data/nn/CAP_multiband_NN.py` | `SCAP_DNNpy2` | PyTorch BiGRU 后均衡器 |
+| `nn_cap_equalizer.py` | — | CAP NN 的子进程封装 |
 
-## Requirements
+## 依赖要求
 
 ```bash
 pip install -r requirements.txt
 ```
 
-`torch` is required only for the NN equalizer (`--use-nn`). Use the CPU/CUDA wheel
-appropriate for your machine.
+`torch` 仅 NN 均衡器（`--use-nn`）需要。请根据本机环境选用 CPU/CUDA 版本的安装包。
 
-## Quick start
+## 快速开始
 
-### Run tests
+### 运行测试
 
 ```bash
 python test_cap.py
 ```
 
-### Single-band CAP offline simulation
+### 单频带 CAP 离线仿真
 
 ```bash
 python main_cap.py --mode singleband --order 64 --constellation QAM --snr 27 --seed 100
 ```
 
-### Multi-band CAP offline simulation
+### 多频带 CAP 离线仿真
 
 ```bash
 python main_cap.py --mode multiband --order 16 --constellation QAM --snr 25 --seed 1
 ```
 
-### Multi-band with NN post-equalizer
+### 多频带 + NN 后均衡器
 
 ```bash
 python main_cap.py --mode multiband --order 16 --use-nn
@@ -69,25 +68,25 @@ python cap_gui.py
 
 提供参数配置、一键运行、星座图/波形/频谱显示和结果面板。
 
-## Configuration
+## 配置说明
 
-Edit `config_cap.py` for:
+编辑 `config_cap.py` 可配置：
 
-- Symbol rates, sample rates, roll-off factors
-- AWG / oscilloscope VISA addresses
-- Virtual channel SNR, nonlinearity, fading
-- LMS/Volterra tap counts and step sizes
-- NN training parameters (inside `data/nn/CAP_multiband_NN.py`)
+- 符号速率、采样速率、滚降系数
+- AWG / 示波器的 VISA 地址
+- 虚拟信道信噪比、非线性、衰落
+- LMS/Volterra 的抽头数与步长
+- NN 训练参数（位于 `data/nn/CAP_multiband_NN.py` 内）
 
-## Golden-reference verification
+## 黄金参考验证
 
-`test_cap.py` compares the Python-generated single-band CAP waveform with the
-MATLAB-generated `data32QAM.txt`. The normalised maximum difference is below
-`1e-6`, confirming bit-exact equivalence of the pulse-shaping path.
+`test_cap.py` 将 Python 生成的单频带 CAP 波形与 MATLAB 生成的
+`data32QAM.txt` 进行比对。归一化最大差异低于 `1e-6`，
+确认了脉冲成形路径的逐比特等价性。
 
-## Notes
+## 备注
 
-- The MATLAB project uses **CAP**, not DMT/OFDM. This Python port therefore
-  implements CAP modulation/demodulation, not IFFT/FFT-based multicarrier.
-- Multi-band CAP bands intentionally overlap; raw matched-filter BER is high.
-  Use LMS (`--no-lms` to disable) or NN (`--use-nn`) for separation/equalization.
+- MATLAB 工程使用的是 **CAP**，而非 DMT/OFDM。因此本 Python 移植实现的是
+  CAP 调制/解调，而非基于 IFFT/FFT 的多载波方案。
+- 多频带 CAP 的各频带有意相互重叠，因此未经均衡的匹配滤波误码率较高。
+  可使用 LMS（`--no-lms` 禁用）或 NN（`--use-nn`）进行分离/均衡。

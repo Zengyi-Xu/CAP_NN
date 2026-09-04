@@ -363,8 +363,8 @@ def build_tx_waveform(fig, run_id, title):
     t = np.arange(n) / fs
     ax.plot(t * 1e6, tx[:n], "b.-", linewidth=1, markersize=2)
     ax.set_title(title)
-    ax.set_xlabel("Time (us)")
-    ax.set_ylabel("Amplitude")
+    ax.set_xlabel("时间 (us)")
+    ax.set_ylabel("幅度")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
 
@@ -378,8 +378,8 @@ def build_rx_waveform(fig, run_id, title):
     label = "RX" if sigs["has_rx"] else "TX placeholder"
     ax.plot(t * 1e6, rx[:n], "b.-", linewidth=1, markersize=2)
     ax.set_title(f"{title} ({label})")
-    ax.set_xlabel("Time (us)")
-    ax.set_ylabel("Amplitude")
+    ax.set_xlabel("时间 (us)")
+    ax.set_ylabel("幅度")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
 
@@ -395,7 +395,7 @@ def build_tx_spectrum(fig, run_id, title):
     ax.plot(freqs / scale, spec, "b-", linewidth=1)
     ax.set_title(title)
     ax.set_xlabel(f"Frequency ({unit})")
-    ax.set_ylabel("Magnitude (dB)")
+    ax.set_ylabel("幅度 (dB)")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
 
@@ -412,7 +412,7 @@ def build_rx_spectrum(fig, run_id, title):
     ax.plot(freqs / scale, spec, "b-", linewidth=1)
     ax.set_title(f"{title} ({label})")
     ax.set_xlabel(f"Frequency ({unit})")
-    ax.set_ylabel("Magnitude (dB)")
+    ax.set_ylabel("幅度 (dB)")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
 
@@ -425,7 +425,7 @@ def build_tx_constellation(fig, run_id, title):
         ax.plot(iq.real, iq.imag, "b.", alpha=0.4, markersize=4)
         ax.set_title(title)
     else:
-        ax.text(0.5, 0.5, "Constellation not available\nfor multiband",
+        ax.text(0.5, 0.5, "多频带模式无星座图",
                 ha="center", va="center", transform=ax.transAxes)
         ax.set_title(title)
     ax.set_xlabel("I")
@@ -446,9 +446,9 @@ def build_constellation_density(fig, run_id, title):
     ax = fig.add_subplot(111)
     if iq is not None and len(iq):
         hb = ax.hexbin(iq.real, iq.imag, gridsize=80, cmap="GnBu", mincnt=1)
-        fig.colorbar(hb, ax=ax, label="Density")
+        fig.colorbar(hb, ax=ax, label="密度")
     else:
-        ax.text(0.5, 0.5, "Constellation density not available\nfor multiband",
+        ax.text(0.5, 0.5, "多频带模式无星座密度图",
                 ha="center", va="center", transform=ax.transAxes)
     ax.set_title(title)
     ax.set_xlabel("I")
@@ -462,7 +462,7 @@ def build_records_trend(fig, records, title):
     """Trend across runs: SNR and BER/SER."""
     if not records:
         ax = fig.add_subplot(111)
-        ax.text(0.5, 0.5, "No experiment records yet", ha="center", va="center",
+        ax.text(0.5, 0.5, "暂无实验记录", ha="center", va="center",
                 transform=ax.transAxes)
         return
     xs = list(range(len(records)))
@@ -499,8 +499,8 @@ def build_records_trend(fig, records, title):
     ax2 = fig.add_subplot(212, sharex=ax1)
     ax2.semilogy(xs, bers, "r-x", markersize=4, linewidth=1.5, label="BER")
     ax2.semilogy(xs, sers, "b-s", markersize=4, linewidth=1.5, label="SER")
-    ax2.set_xlabel("Run (chronological)")
-    ax2.set_ylabel("Error Rate")
+    ax2.set_xlabel("实验（按时间顺序）")
+    ax2.set_ylabel("误码率")
     ax2.legend()
     ax2.grid(True, which="both", ls="--", alpha=0.3)
     ax2.set_xticks(xs)
@@ -514,14 +514,14 @@ def build_records_trend(fig, records, title):
 
 FIGURES = {
     # Tab 1: Waveform & Spectrum
-    "tx_waveform":   (build_tx_waveform,   "TX Time Waveform"),
-    "rx_waveform":   (build_rx_waveform,   "RX Time Waveform"),
-    "tx_spectrum":   (build_tx_spectrum,   "TX Spectrum"),
-    "rx_spectrum":   (build_rx_spectrum,   "RX Spectrum"),
+    "tx_waveform":   (build_tx_waveform,   "发射时域波形"),
+    "rx_waveform":   (build_rx_waveform,   "接收时域波形"),
+    "tx_spectrum":   (build_tx_spectrum,   "发射频谱"),
+    "rx_spectrum":   (build_rx_spectrum,   "接收频谱"),
     # Tab 2: CAP Modulation
-    "tx_constellation":   (build_tx_constellation,   "TX Constellation"),
-    "rx_constellation":   (build_rx_constellation,   "RX Constellation"),
-    "constellation_density": (build_constellation_density, "Constellation Density"),
+    "tx_constellation":   (build_tx_constellation,   "发射星座图"),
+    "rx_constellation":   (build_rx_constellation,   "接收星座图"),
+    "constellation_density": (build_constellation_density, "星座密度图"),
 }
 
 TAB_WAVEFORM = [
@@ -717,7 +717,7 @@ class PlotPanel(ttk.Frame):
 
         left = make_card(self)
         left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
-        ttk.Label(left, text="Plot List", style="Section.TLabel"
+        ttk.Label(left, text="图形列表", style="Section.TLabel"
                   ).pack(anchor=tk.W, padx=12, pady=(10, 6))
         lb_frame = tk.Frame(left, bg=COLOR_CARD)
         lb_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
@@ -734,16 +734,16 @@ class PlotPanel(ttk.Frame):
         self.listbox.configure(yscrollcommand=sb.set)
         self.listbox.bind("<<ListboxSelect>>", self._on_select)
 
-        ttk.Button(left, text="Export Current Image",
+        ttk.Button(left, text="导出当前图像",
                    command=self._export_image
                    ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
-        ttk.Button(left, text="Save All Images",
+        ttk.Button(left, text="保存全部图像",
                    command=self._save_all_images
                    ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
-        ttk.Button(left, text="Export Current Plot Data",
+        ttk.Button(left, text="导出当前图形数据",
                    command=self._export_data
                    ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
-        ttk.Button(left, text="Export All Plot Data",
+        ttk.Button(left, text="导出全部图形数据",
                    command=self._export_all_data
                    ).pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 8))
 
@@ -768,7 +768,7 @@ class PlotPanel(ttk.Frame):
                 self.listbox.insert(tk.END, f"  {FIGURES[name][1]}")
                 self._items.append(name)
         if self.include_trend and self.app.records:
-            self.listbox.insert(tk.END, "  Experiment Trend (SNR / BER / SER)")
+            self.listbox.insert(tk.END, "  实验趋势 (SNR / BER / SER)")
             self._items.append(TREND_KEY)
         if self._items:
             self.listbox.selection_set(0)
@@ -776,7 +776,7 @@ class PlotPanel(ttk.Frame):
         else:
             self.fig.clear()
             ax = self.fig.add_subplot(111)
-            ax.text(0.5, 0.5, "No data of this category for current experiment",
+            ax.text(0.5, 0.5, "当前实验无此类别数据",
                     ha="center", va="center", transform=ax.transAxes)
             self.canvas.draw_idle()
 
@@ -811,18 +811,18 @@ class PlotPanel(ttk.Frame):
         """Export the selected plot as PNG; default save location is data/plots/<run_id>/."""
         sel = self.listbox.curselection()
         if not sel:
-            messagebox.showinfo("Note", "Please select a plot first")
+            messagebox.showinfo("提示", "请先选择一个图形")
             return
         name = self._items[sel[0]]
         run_id = self.app.current_run
         if not run_id:
-            messagebox.showinfo("Note", "No experiment currently selected")
+            messagebox.showinfo("提示", "当前未选择实验")
             return
 
         plot_dir = cfg.PLOT_DIR / run_id
         default_name = f"{name}.png"
         path = filedialog.asksaveasfilename(
-            title="Export Image",
+            title="导出图像",
             initialdir=str(plot_dir),
             initialfile=default_name,
             defaultextension=".png",
@@ -832,33 +832,33 @@ class PlotPanel(ttk.Frame):
             return
         path = Path(path)
         if path.is_file():
-            if not messagebox.askyesno("Confirm Overwrite",
+            if not messagebox.askyesno("确认覆盖",
                                        f"File already exists:\n{path}\n\nOverwrite?"):
                 return
         try:
             plot_dir.mkdir(parents=True, exist_ok=True)
             self._safe_savefig(path)
             self._save_plot_metadata(name, path)
-            messagebox.showinfo("Export Successful", f"Saved to:\n{path}")
+            messagebox.showinfo("导出成功", f"Saved to:\n{path}")
         except Exception as exc:
-            messagebox.showerror("Export Failed", str(exc))
+            messagebox.showerror("导出失败", str(exc))
 
     def _save_all_images(self):
         """Save all plots for the current run as PNG into data/plots/<run_id>/."""
         run_id = self.app.current_run
         if not run_id:
-            messagebox.showinfo("Note", "No experiment currently selected")
+            messagebox.showinfo("提示", "当前未选择实验")
             return
         names = available_plots(run_id, self.plot_names)
         if not names:
-            messagebox.showinfo("Note", "No plots available to save for current experiment")
+            messagebox.showinfo("提示", "当前实验没有可保存的图形")
             return
 
         plot_dir = cfg.PLOT_DIR / run_id
         existing = sorted([p.name for p in plot_dir.glob("*.png")]) if plot_dir.is_dir() else []
         if existing:
             if not messagebox.askyesno(
-                    "Confirm Overwrite",
+                    "确认覆盖",
                     f"{len(existing)} image(s) already exist in {plot_dir}.\n\n"
                     f"Overwrite?"):
                 return
@@ -882,12 +882,12 @@ class PlotPanel(ttk.Frame):
             else:
                 self._show(self._items[0])
         except Exception as exc:
-            messagebox.showerror("Save Failed", str(exc))
+            messagebox.showerror("保存失败", str(exc))
             return
         if errors:
-            messagebox.showerror("Partial Save Failed", "\n".join(errors))
+            messagebox.showerror("部分保存失败", "\n".join(errors))
         else:
-            messagebox.showinfo("Save Successful",
+            messagebox.showinfo("保存成功",
                                 f"Saved {saved} image(s) to:\n{plot_dir}")
 
     def _save_plot_metadata(self, name, png_path: Path):
@@ -942,18 +942,18 @@ class PlotPanel(ttk.Frame):
         """Export raw data for the selected plot to Excel (each array in its own sheet)."""
         sel = self.listbox.curselection()
         if not sel:
-            messagebox.showinfo("Note", "Please select a plot first")
+            messagebox.showinfo("提示", "请先选择一个图形")
             return
         name = self._items[sel[0]]
         run_id = self.app.current_run
         if not run_id:
-            messagebox.showinfo("Note", "No experiment currently selected")
+            messagebox.showinfo("提示", "当前未选择实验")
             return
 
         if name == TREND_KEY:
             default_name = f"trend_{run_id}.json"
             path = filedialog.asksaveasfilename(
-                title="Export Trend Data",
+                title="导出趋势数据",
                 initialfile=default_name,
                 defaultextension=".json",
                 filetypes=[("JSON", "*.json"), ("All files", "*.*")])
@@ -963,18 +963,18 @@ class PlotPanel(ttk.Frame):
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(self.app.records, f, indent=2,
                               ensure_ascii=False, default=str)
-                messagebox.showinfo("Export Successful", f"Saved to:\n{path}")
+                messagebox.showinfo("导出成功", f"Saved to:\n{path}")
             except Exception as exc:
-                messagebox.showerror("Export Failed", str(exc))
+                messagebox.showerror("导出失败", str(exc))
             return
 
         arrays = self._gather_plot_arrays(name, run_id)
         if not arrays:
-            messagebox.showerror("Export Failed", "No data available for this plot")
+            messagebox.showerror("导出失败", "该图形无可用数据")
             return
         default_name = f"{name}_{run_id}.xlsx"
         path = filedialog.asksaveasfilename(
-            title="Export Plot Data",
+            title="导出图形数据",
             initialfile=default_name,
             defaultextension=".xlsx",
             filetypes=[("Excel", "*.xlsx"), ("All files", "*.*")])
@@ -995,29 +995,29 @@ class PlotPanel(ttk.Frame):
                 ws.cell(row=1, column=3, value=f"Shape: {arr.shape}")
                 _write_array_to_sheet(ws, arr, start_row=3, start_col=1)
             wb.save(path)
-            messagebox.showinfo("Export Successful", f"Saved to:\n{path}")
+            messagebox.showinfo("导出成功", f"Saved to:\n{path}")
         except Exception:
             tb = traceback.format_exc()
             print(tb)
-            messagebox.showerror("Export Failed", f"Failed to export current plot data:\n{tb}")
+            messagebox.showerror("导出失败", f"Failed to export current plot data:\n{tb}")
 
     def _export_all_data(self):
         """Export all plot data for the current run to Excel."""
         run_id = self.app.current_run
         if not run_id:
-            messagebox.showinfo("Note", "No experiment currently selected")
+            messagebox.showinfo("提示", "当前未选择实验")
             return
         names = available_plots(run_id, self.plot_names)
         if not names:
-            messagebox.showinfo("Note", "No plot data available to export for current experiment")
+            messagebox.showinfo("提示", "当前实验没有可导出的图形数据")
             return
 
         default_name = f"all_plots_{run_id}.xlsx"
         path = filedialog.asksaveasfilename(
-            title="Export All Plot Data",
+            title="导出全部图形数据",
             initialfile=default_name,
             defaultextension=".xlsx",
-            filetypes=[("Excel", "*.xlsx"), ("All files", "*.*")])
+            filetypes=[("Excel", "*.xlsx"), ("所有文件", "*.*")])
         if not path:
             return
         try:
@@ -1037,12 +1037,12 @@ class PlotPanel(ttk.Frame):
                     ws.cell(row=1, column=3, value=f"Shape: {arr.shape}")
                     _write_array_to_sheet(ws, arr, start_row=3, start_col=1)
             wb.save(path)
-            messagebox.showinfo("Export Successful", f"Saved to:\n{path}\n"
+            messagebox.showinfo("导出成功", f"Saved to:\n{path}\n"
                                            f"Exported data for {len(names)} plot(s)")
         except Exception:
             tb = traceback.format_exc()
             print(tb)
-            messagebox.showerror("Export Failed", f"Failed to export all plot data:\n{tb}")
+            messagebox.showerror("导出失败", f"Failed to export all plot data:\n{tb}")
 
 
 class ResultsPanel(ttk.Frame):
@@ -1066,7 +1066,7 @@ class ResultsPanel(ttk.Frame):
         super().__init__(parent)
         self.app = app
 
-        top = ttk.LabelFrame(self, text=" Transmission Experiment Records (click row to switch experiment) ")
+        top = ttk.LabelFrame(self, text=" 传输实验记录（点击行切换实验） ")
         top.pack(fill=tk.X, padx=2, pady=(2, 8))
         tree_frame = tk.Frame(top, bg=COLOR_CARD)
         tree_frame.pack(fill=tk.X, padx=6, pady=6)
@@ -1084,7 +1084,7 @@ class ResultsPanel(ttk.Frame):
         self.tree.pack(fill=tk.X, expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._on_row_select)
 
-        bottom = ttk.LabelFrame(self, text=" Current Experiment Results ")
+        bottom = ttk.LabelFrame(self, text=" 当前实验结果 ")
         bottom.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.plot_panel = PlotPanel(bottom, app, TAB_RESULTS,
                                     include_trend=True)
@@ -1145,10 +1145,10 @@ class RunPanel(ttk.Frame):
         f = app.font_scale
 
         # ── Parameter card ───────────────────────────────────────────
-        opt = ttk.LabelFrame(self, text=" Experiment Parameters ")
+        opt = ttk.LabelFrame(self, text=" 实验参数 ")
         opt.pack(fill=tk.X, padx=2, pady=(2, 8))
 
-        ttk.Label(opt, text="Mode:", style="Card.TLabel"
+        ttk.Label(opt, text="模式:", style="Card.TLabel"
                   ).grid(row=0, column=0, sticky=tk.W, padx=12, pady=(10, 4))
         self.mode_var = tk.StringVar(value="singleband")
         self.mode_combo = ttk.Combobox(
@@ -1158,56 +1158,56 @@ class RunPanel(ttk.Frame):
         self.mode_combo.grid(row=0, column=1, sticky=tk.W, padx=(4, 16), pady=(10, 4))
         self.mode_combo.bind("<<ComboboxSelected>>", self._on_mode_change)
 
-        ttk.Label(opt, text="Order:", style="Card.TLabel"
+        ttk.Label(opt, text="调制阶数:", style="Card.TLabel"
                   ).grid(row=1, column=0, sticky=tk.W, padx=12, pady=4)
         self.order_var = tk.IntVar(value=cfg.SB_QAMORDER)
         tk.Spinbox(opt, from_=4, to=128, textvariable=self.order_var, width=16
                    ).grid(row=1, column=1, sticky=tk.W, padx=(4, 16), pady=4)
 
-        ttk.Label(opt, text="Constellation:", style="Card.TLabel"
+        ttk.Label(opt, text="星座类型:", style="Card.TLabel"
                   ).grid(row=2, column=0, sticky=tk.W, padx=12, pady=4)
         self.const_var = tk.StringVar(value=cfg.SB_CONSTELLATION)
         ttk.Combobox(opt, textvariable=self.const_var,
                      values=["QAM", "APSK"], state="readonly", width=16
                      ).grid(row=2, column=1, sticky=tk.W, padx=(4, 16), pady=4)
 
-        ttk.Label(opt, text="SNR (dB):", style="Card.TLabel"
+        ttk.Label(opt, text="信噪比 (dB):", style="Card.TLabel"
                   ).grid(row=3, column=0, sticky=tk.W, padx=12, pady=4)
         self.snr_var = tk.DoubleVar(value=cfg.SB_SNR_DB)
         tk.Spinbox(opt, from_=0.0, to=50.0, textvariable=self.snr_var, width=16
                    ).grid(row=3, column=1, sticky=tk.W, padx=(4, 16), pady=4)
 
-        ttk.Label(opt, text="Random Seed:", style="Card.TLabel"
+        ttk.Label(opt, text="随机种子:", style="Card.TLabel"
                   ).grid(row=4, column=0, sticky=tk.W, padx=12, pady=4)
         self.seed_var = tk.IntVar(value=100)
         tk.Spinbox(opt, from_=0, to=10000, textvariable=self.seed_var, width=16
                    ).grid(row=4, column=1, sticky=tk.W, padx=(4, 16), pady=4)
 
         self.virtual_var = tk.BooleanVar(value=bool(cfg.USE_VIRTUAL_CHANNEL))
-        ttk.Checkbutton(opt, text="Use virtual channel",
+        ttk.Checkbutton(opt, text="使用虚拟信道",
                         variable=self.virtual_var
                         ).grid(row=5, column=1, sticky=tk.W, padx=(4, 16), pady=4)
 
         self.nn_var = tk.BooleanVar(value=False)
-        self.nn_check = ttk.Checkbutton(opt, text="Use NN post-equalizer (multiband only)",
+        self.nn_check = ttk.Checkbutton(opt, text="使用 NN 后均衡器（仅多频带）",
                                         variable=self.nn_var)
         self.nn_check.grid(row=6, column=1, sticky=tk.W, padx=(4, 16), pady=(4, 10))
 
         btn_bar = tk.Frame(opt, bg=COLOR_CARD)
         btn_bar.grid(row=7, column=0, columnspan=2, sticky=tk.W,
                      padx=12, pady=(0, 8))
-        self.run_btn = ttk.Button(btn_bar, text="▶  Run Simulation",
+        self.run_btn = ttk.Button(btn_bar, text="▶  运行仿真",
                                   style="Accent.TButton",
                                   command=self.start_run)
         self.run_btn.pack(side=tk.LEFT, padx=(0, 8))
-        self.quick_btn = ttk.Button(btn_bar, text="⚡ Quick Plot (TX only)",
+        self.quick_btn = ttk.Button(btn_bar, text="⚡ 快速绘图（仅发射）",
                                     command=self._quick_plot)
         self.quick_btn.pack(side=tk.LEFT, padx=(0, 8))
-        self.run_status = ttk.Label(btn_bar, text="Ready", style="DimCard.TLabel")
+        self.run_status = ttk.Label(btn_bar, text="就绪", style="DimCard.TLabel")
         self.run_status.pack(side=tk.LEFT, padx=16)
 
         # ── Bottom: log card ─────────────────────────────────────────
-        log_card = ttk.LabelFrame(self, text=" Run Log ")
+        log_card = ttk.LabelFrame(self, text=" 运行日志 ")
         log_card.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         log_frame = tk.Frame(log_card, bg=COLOR_CARD)
         log_frame.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
@@ -1259,7 +1259,7 @@ class RunPanel(ttk.Frame):
         if self._thread is not None and self._thread.is_alive():
             return
         self.run_btn.configure(state=tk.DISABLED)
-        self.run_status.configure(text="Running…")
+        self.run_status.configure(text="运行中…")
         self.app.set_running(True)
         self._append_log("\n========== Starting CAP Simulation ==========\n", "head")
         self._thread = threading.Thread(target=self._run_thread, daemon=True)
@@ -1353,10 +1353,10 @@ class RunPanel(ttk.Frame):
         self.run_btn.configure(state=tk.NORMAL)
         self.app.set_running(False)
         if run_id:
-            self.run_status.configure(text="Test completed ✔")
+            self.run_status.configure(text="测试完成 ✔")
             self.app.reload_data(select_latest=True)
         else:
-            self.run_status.configure(text="Test failed")
+            self.run_status.configure(text="测试失败")
 
     def _quick_plot(self):
         """Generate a TX-only preview without running a full simulation."""
@@ -1385,7 +1385,7 @@ class RunPanel(ttk.Frame):
             self.app.show_quick_plots(data)
             self._append_log("Quick plot (TX only) generated.")
         except Exception as exc:
-            messagebox.showerror("Plot Error", str(exc))
+            messagebox.showerror("绘图错误", str(exc))
             self._append_log(f"Quick plot error: {exc}", "err")
 
 
@@ -1423,9 +1423,9 @@ class Keithley2400Panel(ttk.Frame):
 
         hdr = tk.Frame(scrollable, bg=COLOR_BG)
         hdr.pack(fill=tk.X, padx=16, pady=(14, 6))
-        ttk.Label(hdr, text="Keithley 2400 SourceMeter Control",
+        ttk.Label(hdr, text="Keithley 2400 源表控制",
                   style="Title.TLabel").pack(side=tk.LEFT)
-        self.status_lbl = ttk.Label(hdr, text="Disconnected", style="Pill.TLabel")
+        self.status_lbl = ttk.Label(hdr, text="未连接", style="Pill.TLabel")
         self.status_lbl.pack(side=tk.RIGHT)
 
         card = make_card(scrollable)
@@ -1433,22 +1433,22 @@ class Keithley2400Panel(ttk.Frame):
         inner = tk.Frame(card, bg=COLOR_CARD)
         inner.pack(fill=tk.X, padx=12, pady=12)
 
-        ttk.Label(inner, text="COM Port", style="Section.TLabel").grid(
+        ttk.Label(inner, text="COM 端口", style="Section.TLabel").grid(
             row=0, column=0, sticky=tk.W, padx=(0, 8), pady=4)
         self.port_combo = ttk.Combobox(inner, textvariable=self.port_var,
                                        values=[], width=40, state="readonly")
         self.port_combo.grid(row=0, column=1, sticky=tk.W, padx=(0, 8), pady=4)
-        ttk.Button(inner, text="⟳ Refresh", command=self._refresh_ports).grid(
+        ttk.Button(inner, text="⟳ 刷新", command=self._refresh_ports).grid(
             row=0, column=2, padx=(0, 8), pady=4)
 
-        ttk.Label(inner, text="Baud", style="Section.TLabel").grid(
+        ttk.Label(inner, text="波特率", style="Section.TLabel").grid(
             row=1, column=0, sticky=tk.W, padx=(0, 8), pady=4)
         self.baud_combo = ttk.Combobox(inner, values=[9600, 19200, 38400, 57600, 115200],
                                        width=12, state="readonly")
         self.baud_combo.set(str(cfg.K2400_BAUDRATE))
         self.baud_combo.grid(row=1, column=1, sticky=tk.W, padx=(0, 8), pady=4)
 
-        self.conn_btn = ttk.Button(inner, text="Connect", command=self._toggle_connect)
+        self.conn_btn = ttk.Button(inner, text="连接", command=self._toggle_connect)
         self.conn_btn.grid(row=1, column=2, padx=(0, 8), pady=4)
 
         card2 = make_card(scrollable)
@@ -1456,21 +1456,21 @@ class Keithley2400Panel(ttk.Frame):
         inner2 = tk.Frame(card2, bg=COLOR_CARD)
         inner2.pack(fill=tk.X, padx=12, pady=12)
 
-        ttk.Label(inner2, text="Source Mode", style="Section.TLabel").grid(
+        ttk.Label(inner2, text="源模式", style="Section.TLabel").grid(
             row=0, column=0, sticky=tk.W, padx=(0, 8), pady=4)
         self.mode_combo = ttk.Combobox(inner2, textvariable=self.source_mode_var,
                                        values=self.SOURCE_MODES, state="readonly", width=14)
         self.mode_combo.bind("<<ComboboxSelected>>", self._on_mode_change)
         self.mode_combo.grid(row=0, column=1, sticky=tk.W, padx=(0, 8), pady=4)
 
-        ttk.Label(inner2, text="Level", style="Section.TLabel").grid(
+        ttk.Label(inner2, text="电平", style="Section.TLabel").grid(
             row=1, column=0, sticky=tk.W, padx=(0, 8), pady=4)
         self.level_entry = ttk.Entry(inner2, textvariable=self.level_var, width=14)
         self.level_entry.grid(row=1, column=1, sticky=tk.W, padx=(0, 8), pady=4)
         self.level_unit_lbl = ttk.Label(inner2, text="V", style="Section.TLabel")
         self.level_unit_lbl.grid(row=1, column=2, sticky=tk.W, pady=4)
 
-        ttk.Label(inner2, text="Compliance", style="Section.TLabel").grid(
+        ttk.Label(inner2, text="限值", style="Section.TLabel").grid(
             row=2, column=0, sticky=tk.W, padx=(0, 8), pady=4)
         self.comp_entry = ttk.Entry(inner2, textvariable=self.compliance_var, width=14)
         self.comp_entry.grid(row=2, column=1, sticky=tk.W, padx=(0, 8), pady=4)
@@ -1482,10 +1482,10 @@ class Keithley2400Panel(ttk.Frame):
         self.nplc_entry = ttk.Entry(inner2, textvariable=self.nplc_var, width=14)
         self.nplc_entry.grid(row=3, column=1, sticky=tk.W, padx=(0, 8), pady=4)
 
-        ttk.Checkbutton(inner2, text="Auto range", variable=self.auto_range_var).grid(
+        ttk.Checkbutton(inner2, text="自动量程", variable=self.auto_range_var).grid(
             row=4, column=1, sticky=tk.W, padx=(0, 8), pady=4)
 
-        ttk.Button(inner2, text="Apply Settings", command=self._apply_settings).grid(
+        ttk.Button(inner2, text="应用设置", command=self._apply_settings).grid(
             row=5, column=1, sticky=tk.W, padx=(0, 8), pady=(12, 0))
 
         card3 = make_card(scrollable)
@@ -1493,22 +1493,22 @@ class Keithley2400Panel(ttk.Frame):
         inner3 = tk.Frame(card3, bg=COLOR_CARD)
         inner3.pack(fill=tk.X, padx=12, pady=12)
 
-        self.out_btn = ttk.Button(inner3, text="Output ON", command=self._toggle_output)
+        self.out_btn = ttk.Button(inner3, text="输出开", command=self._toggle_output)
         self.out_btn.grid(row=0, column=0, padx=(0, 8), pady=4)
-        ttk.Button(inner3, text="Measure", command=self._measure).grid(
+        ttk.Button(inner3, text="测量", command=self._measure).grid(
             row=0, column=1, padx=(0, 8), pady=4)
-        ttk.Button(inner3, text="Reset Instrument", command=self._reset).grid(
+        ttk.Button(inner3, text="复位仪器", command=self._reset).grid(
             row=0, column=2, padx=(0, 8), pady=4)
 
         self.last_measure_lbl = ttk.Label(
-            inner3, text="Last measure: --", style="Section.TLabel")
+            inner3, text="上次测量: --", style="Section.TLabel")
         self.last_measure_lbl.grid(row=1, column=0, columnspan=4, sticky=tk.W, pady=(12, 0))
 
         card4 = make_card(scrollable)
         card4.pack(fill=tk.BOTH, expand=True, padx=16, pady=6)
         inner4 = tk.Frame(card4, bg=COLOR_CARD)
         inner4.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
-        ttk.Label(inner4, text="Communication Log", style="Section.TLabel").pack(anchor=tk.W)
+        ttk.Label(inner4, text="通信日志", style="Section.TLabel").pack(anchor=tk.W)
         self.log_text = tk.Text(inner4, height=12, wrap=tk.WORD, font=(FONT_MONO, 9),
                                 bg="#FAFAFA", fg=COLOR_TEXT, relief=tk.FLAT,
                                 highlightbackground=COLOR_BORDER, highlightthickness=1)
@@ -1555,23 +1555,23 @@ class Keithley2400Panel(ttk.Frame):
     def _connect(self):
         port = self.port_var.get()
         if not port:
-            messagebox.showwarning("No Port", "Please select a COM port first.")
+            messagebox.showwarning("未选端口", "请先选择 COM 端口。")
             return
         baud = int(self.baud_combo.get() or cfg.K2400_BAUDRATE)
         try:
             self.instrument = Keithley2400(port=port, baudrate=baud,
                                            timeout=cfg.K2400_TIMEOUT)
             self.instrument.connect()
-            self.conn_btn.configure(text="Disconnect")
+            self.conn_btn.configure(text="断开连接")
             self.status_lbl.configure(text=f"Connected ({port})")
             self._log(f"Connected to {port} at {baud} baud")
             self._apply_settings()
         except K2400ConnectionError as exc:
-            messagebox.showerror("Connection Failed", str(exc))
+            messagebox.showerror("连接失败", str(exc))
             self._log(f"Connection failed: {exc}", "err")
             self.instrument = None
         except Exception as exc:
-            messagebox.showerror("Connection Error", str(exc))
+            messagebox.showerror("连接错误", str(exc))
             self._log(f"Connection error: {exc}", "err")
             self.instrument = None
 
@@ -1583,10 +1583,10 @@ class Keithley2400Panel(ttk.Frame):
                 self._log(f"Disconnect error: {exc}", "err")
             finally:
                 self.instrument = None
-        self.conn_btn.configure(text="Connect")
-        self.status_lbl.configure(text="Disconnected")
+        self.conn_btn.configure(text="连接")
+        self.status_lbl.configure(text="未连接")
         self.output_var.set(False)
-        self.out_btn.configure(text="Output ON")
+        self.out_btn.configure(text="输出开")
         self._log("Disconnected")
 
     def _apply_settings(self):
@@ -1609,11 +1609,11 @@ class Keithley2400Panel(ttk.Frame):
             self._log(f"Settings applied: {mode} source, level={level}, "
                       f"compliance={compliance}, NPLC={nplc}, auto_range={auto_range}")
         except ValueError:
-            messagebox.showerror("Invalid Value", "Level, compliance and NPLC must be numbers.")
+            messagebox.showerror("数值无效", "电平、限值和 NPLC 必须是数字。")
         except K2400ConfigError as exc:
-            messagebox.showerror("Configuration Error", str(exc))
+            messagebox.showerror("配置错误", str(exc))
         except Exception as exc:
-            messagebox.showerror("Apply Settings Failed", str(exc))
+            messagebox.showerror("应用设置失败", str(exc))
             self._log(f"Apply settings failed: {exc}", "err")
 
     def _toggle_output(self):
@@ -1624,15 +1624,15 @@ class Keithley2400Panel(ttk.Frame):
             if self.output_var.get():
                 self.instrument.output_off()
                 self.output_var.set(False)
-                self.out_btn.configure(text="Output ON")
+                self.out_btn.configure(text="输出开")
                 self._log("Output OFF")
             else:
                 self.instrument.output_on()
                 self.output_var.set(True)
-                self.out_btn.configure(text="Output OFF")
+                self.out_btn.configure(text="输出关")
                 self._log("Output ON")
         except Exception as exc:
-            messagebox.showerror("Output Control Failed", str(exc))
+            messagebox.showerror("输出控制失败", str(exc))
             self._log(f"Output control failed: {exc}", "err")
 
     def _measure(self):
@@ -1648,10 +1648,10 @@ class Keithley2400Panel(ttk.Frame):
             self.last_measure_lbl.configure(text=f"Last measure: {text}")
             self._log(f"Measure: {text}")
         except K2400CommandError as exc:
-            messagebox.showerror("Measurement Failed", str(exc))
+            messagebox.showerror("测量失败", str(exc))
             self._log(f"Measurement failed: {exc}", "err")
         except Exception as exc:
-            messagebox.showerror("Measurement Error", str(exc))
+            messagebox.showerror("测量错误", str(exc))
             self._log(f"Measurement error: {exc}", "err")
 
     def _reset(self):
@@ -1663,7 +1663,7 @@ class Keithley2400Panel(ttk.Frame):
             self._log("Instrument reset.")
             self._apply_settings()
         except Exception as exc:
-            messagebox.showerror("Reset Failed", str(exc))
+            messagebox.showerror("复位失败", str(exc))
             self._log(f"Reset failed: {exc}", "err")
 
     def on_close(self):
@@ -1713,87 +1713,87 @@ class GridScanPanel(ttk.Frame):
 
         hdr = tk.Frame(left, bg=COLOR_BG)
         hdr.pack(fill=tk.X, pady=(0, 8))
-        ttk.Label(hdr, text="Grid Scan Configuration", style="Title.TLabel").pack(anchor=tk.W)
+        ttk.Label(hdr, text="网格扫描配置", style="Title.TLabel").pack(anchor=tk.W)
 
         card = make_card(left)
         card.pack(fill=tk.X, pady=6)
         inner = tk.Frame(card, bg=COLOR_CARD)
         inner.pack(fill=tk.X, padx=12, pady=12)
 
-        ttk.Label(inner, text="Parameter 1 (Keithley)", style="Section.TLabel").grid(
+        ttk.Label(inner, text="参数 1 (Keithley)", style="Section.TLabel").grid(
             row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 6))
 
-        ttk.Label(inner, text="Name").grid(row=1, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="名称").grid(row=1, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p1_name_var, width=14).grid(
             row=1, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Label(inner, text="Mode").grid(row=1, column=2, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="模式").grid(row=1, column=2, sticky=tk.W, padx=(0, 4))
         ttk.Combobox(inner, textvariable=self.p1_mode_var,
                      values=["voltage", "current"], state="readonly", width=10).grid(
             row=1, column=3, sticky=tk.W, pady=2)
 
-        ttk.Label(inner, text="Start").grid(row=2, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="起始").grid(row=2, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p1_start_var, width=10).grid(
             row=2, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Label(inner, text="Stop").grid(row=2, column=2, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="终止").grid(row=2, column=2, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p1_stop_var, width=10).grid(
             row=2, column=3, sticky=tk.W, pady=2)
 
-        ttk.Label(inner, text="Step").grid(row=3, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="步进").grid(row=3, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p1_step_var, width=10).grid(
             row=3, column=1, sticky=tk.W, padx=(0, 8), pady=2)
 
-        ttk.Label(inner, text="Parameter 2 (SNR dB)", style="Section.TLabel").grid(
+        ttk.Label(inner, text="参数 2 (SNR dB)", style="Section.TLabel").grid(
             row=4, column=0, columnspan=4, sticky=tk.W, pady=(12, 6))
 
-        ttk.Label(inner, text="Start").grid(row=5, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="起始").grid(row=5, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p2_start_var, width=10).grid(
             row=5, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Label(inner, text="Stop").grid(row=5, column=2, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="终止").grid(row=5, column=2, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p2_stop_var, width=10).grid(
             row=5, column=3, sticky=tk.W, pady=2)
 
-        ttk.Label(inner, text="Step").grid(row=6, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="步进").grid(row=6, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p2_step_var, width=10).grid(
             row=6, column=1, sticky=tk.W, padx=(0, 8), pady=2)
 
-        ttk.Label(inner, text="Pipeline", style="Section.TLabel").grid(
+        ttk.Label(inner, text="处理流程", style="Section.TLabel").grid(
             row=7, column=0, columnspan=4, sticky=tk.W, pady=(12, 6))
 
-        ttk.Label(inner, text="Run mode").grid(row=8, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="运行模式").grid(row=8, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Combobox(inner, textvariable=self.run_mode_var,
                      values=["singleband", "multiband"], state="readonly", width=12).grid(
             row=8, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Label(inner, text="Repeats").grid(row=8, column=2, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="重复次数").grid(row=8, column=2, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.repeats_var, width=10).grid(
             row=8, column=3, sticky=tk.W, pady=2)
 
-        ttk.Label(inner, text="Order").grid(row=9, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="调制阶数").grid(row=9, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.order_var, width=10).grid(
             row=9, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Label(inner, text="Constellation").grid(row=9, column=2, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="星座类型").grid(row=9, column=2, sticky=tk.W, padx=(0, 4))
         ttk.Combobox(inner, textvariable=self.constellation_var,
                      values=["QAM", "APSK"], state="readonly", width=10).grid(
             row=9, column=3, sticky=tk.W, pady=2)
 
-        ttk.Checkbutton(inner, text="Virtual channel", variable=self.use_virtual_channel_var).grid(
+        ttk.Checkbutton(inner, text="虚拟信道", variable=self.use_virtual_channel_var).grid(
             row=10, column=0, columnspan=2, sticky=tk.W, pady=2)
-        ttk.Checkbutton(inner, text="Use NN post-equalizer", variable=self.use_nn_var).grid(
+        ttk.Checkbutton(inner, text="使用 NN 后均衡器", variable=self.use_nn_var).grid(
             row=10, column=2, columnspan=2, sticky=tk.W, pady=2)
 
-        ttk.Label(inner, text="Keithley Connection", style="Section.TLabel").grid(
+        ttk.Label(inner, text="Keithley 连接", style="Section.TLabel").grid(
             row=11, column=0, columnspan=4, sticky=tk.W, pady=(12, 6))
 
-        ttk.Label(inner, text="COM Port").grid(row=12, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="COM 端口").grid(row=12, column=0, sticky=tk.W, padx=(0, 4))
         self.port_combo = ttk.Combobox(inner, textvariable=self.port_var,
                                        values=[], width=18, state="readonly")
         self.port_combo.grid(row=12, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Button(inner, text="⟳ Refresh", command=self._refresh_ports).grid(
+        ttk.Button(inner, text="⟳ 刷新", command=self._refresh_ports).grid(
             row=12, column=2, columnspan=2, sticky=tk.W, pady=2)
 
-        ttk.Label(inner, text="Baud").grid(row=13, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="波特率").grid(row=13, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.baud_var, width=10).grid(
             row=13, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Label(inner, text="Compliance").grid(row=13, column=2, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="限值").grid(row=13, column=2, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.compliance_var, width=10).grid(
             row=13, column=3, sticky=tk.W, pady=2)
 
@@ -1803,13 +1803,13 @@ class GridScanPanel(ttk.Frame):
 
         ctrl = tk.Frame(left, bg=COLOR_CARD)
         ctrl.pack(fill=tk.X, pady=(12, 0), padx=2)
-        self.run_btn = ttk.Button(ctrl, text="▶ Start Grid Scan", command=self._start_scan)
+        self.run_btn = ttk.Button(ctrl, text="▶ 开始网格扫描", command=self._start_scan)
         self.run_btn.pack(side=tk.LEFT, padx=(8, 8), pady=8)
-        self.stop_btn = ttk.Button(ctrl, text="⏹ Stop", command=self._stop_scan, state=tk.DISABLED)
+        self.stop_btn = ttk.Button(ctrl, text="⏹ 停止", command=self._stop_scan, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=(0, 8), pady=8)
 
         self.progress_var = tk.DoubleVar(value=0.0)
-        self.progress_lbl = ttk.Label(left, text="Ready")
+        self.progress_lbl = ttk.Label(left, text="就绪")
         self.progress_lbl.pack(anchor=tk.W, pady=(8, 0))
         self.progress = ttk.Progressbar(left, variable=self.progress_var, maximum=1.0)
         self.progress.pack(fill=tk.X, pady=(4, 0))
@@ -1817,7 +1817,7 @@ class GridScanPanel(ttk.Frame):
         right = tk.Frame(paned, bg=COLOR_BG)
         paned.add(right, weight=2)
 
-        ttk.Label(right, text="Past Grid Scans", style="Title.TLabel").pack(anchor=tk.W, pady=(0, 8))
+        ttk.Label(right, text="历史网格扫描", style="Title.TLabel").pack(anchor=tk.W, pady=(0, 8))
 
         sel = tk.Frame(right, bg=COLOR_BG)
         sel.pack(fill=tk.X, pady=(0, 6))
@@ -1826,7 +1826,7 @@ class GridScanPanel(ttk.Frame):
                                        values=[], state="readonly", width=40)
         self.scan_combo.pack(side=tk.LEFT, padx=(0, 8))
         self.scan_combo.bind("<<ComboboxSelected>>", self._on_scan_selected)
-        ttk.Button(sel, text="⟳ Refresh", command=self._refresh_scan_list).pack(side=tk.LEFT)
+        ttk.Button(sel, text="⟳ 刷新", command=self._refresh_scan_list).pack(side=tk.LEFT)
 
         self.tree = ttk.Treeview(right, show="headings", height=8)
         self.tree.pack(fill=tk.X, pady=(0, 8))
@@ -1843,7 +1843,7 @@ class GridScanPanel(ttk.Frame):
         plot_inner.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
         self.plot_metric_var = tk.StringVar(value="snr_db")
-        ttk.Label(plot_inner, text="Contour metric").pack(anchor=tk.W)
+        ttk.Label(plot_inner, text="等高线指标").pack(anchor=tk.W)
         metric_combo = ttk.Combobox(plot_inner, textvariable=self.plot_metric_var,
                                     values=["snr_db", "ber", "ser"], state="readonly", width=12)
         metric_combo.pack(anchor=tk.W, pady=(0, 6))
@@ -1853,7 +1853,7 @@ class GridScanPanel(ttk.Frame):
         self.ax = self.fig.add_subplot(111)
         self.canvas = FigureCanvasTkAgg(self.fig, plot_inner)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        self.ax.set_title("Select a grid scan to view contour plot")
+        self.ax.set_title("选择一个网格扫描以查看等高线图")
         self.canvas.draw()
 
     def _refresh_ports(self):
@@ -1895,7 +1895,7 @@ class GridScanPanel(ttk.Frame):
         self.ax.clear()
         header, rows = load_summary(scan_id)
         if header is None or not rows:
-            self.ax.set_title("No data")
+            self.ax.set_title("无数据")
             self.canvas.draw()
             return
 
@@ -1909,7 +1909,7 @@ class GridScanPanel(ttk.Frame):
             vpp = np.array([float(r[col_idx["vpp"]]) for r in rows])
             z = np.array([float(r[col_idx[metric]]) if r[col_idx[metric]] else np.nan for r in rows])
         except Exception:
-            self.ax.set_title("Invalid data")
+            self.ax.set_title("数据无效")
             self.canvas.draw()
             return
 
@@ -1959,7 +1959,7 @@ class GridScanPanel(ttk.Frame):
         try:
             gcfg = self._build_config()
         except Exception as exc:
-            messagebox.showerror("Invalid Configuration", str(exc))
+            messagebox.showerror("配置无效", str(exc))
             return
 
         self.stop_requested = False
@@ -1990,7 +1990,7 @@ class GridScanPanel(ttk.Frame):
                 self.scanner.request_stop()
             except Exception:
                 pass
-        self.progress_lbl.configure(text="Stop requested")
+        self.progress_lbl.configure(text="已请求停止")
 
     def _scan_done(self, csv_path: Path, scan_id: str):
         self.run_btn.configure(state=tk.NORMAL)
@@ -2000,13 +2000,13 @@ class GridScanPanel(ttk.Frame):
         self._refresh_scan_list()
         self.scan_var.set(scan_id)
         self._on_scan_selected()
-        messagebox.showinfo("Grid Scan Complete", f"Summary saved to:\n{csv_path}")
+        messagebox.showinfo("网格扫描完成", f"Summary saved to:\n{csv_path}")
 
     def _scan_error(self, exc: Exception):
         self.run_btn.configure(state=tk.NORMAL)
         self.stop_btn.configure(state=tk.DISABLED)
         self.progress_lbl.configure(text=f"Error: {exc}")
-        messagebox.showerror("Grid Scan Failed", str(exc))
+        messagebox.showerror("网格扫描失败", str(exc))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2062,7 +2062,7 @@ class CApGuiApp(tk.Tk):
         inner = tk.Frame(sel, bg=COLOR_CARD)
         inner.pack(fill=tk.X, padx=12, pady=10)
         f = self.font_scale
-        ttk.Label(inner, text="Experiment ID (run_id)", style="Section.TLabel"
+        ttk.Label(inner, text="实验 ID (run_id)", style="Section.TLabel"
                   ).pack(side=tk.LEFT)
         self.run_var = tk.StringVar()
         self.run_combo = ttk.Combobox(
@@ -2071,7 +2071,7 @@ class CApGuiApp(tk.Tk):
         self.run_combo.pack(side=tk.LEFT, padx=(8, 8))
         self.run_combo.bind("<<ComboboxSelected>>",
                             lambda _e: self.select_run(self.run_var.get()))
-        ttk.Button(inner, text="⟳ Refresh Data", command=self.reload_data
+        ttk.Button(inner, text="⟳ 刷新数据", command=self.reload_data
                    ).pack(side=tk.LEFT)
         self.metrics_var = tk.StringVar(value="")
         ttk.Label(inner, textvariable=self.metrics_var, style="Metrics.TLabel"
@@ -2081,21 +2081,21 @@ class CApGuiApp(tk.Tk):
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 8))
 
         tab1 = ttk.Frame(self.notebook)
-        self.notebook.add(tab1, text="  📈 Waveform & Spectrum  ")
+        self.notebook.add(tab1, text="  📈 波形与频谱  ")
         self.panel_wave = PlotPanel(tab1, self, TAB_WAVEFORM)
         self.panel_wave.pack(fill=tk.BOTH, expand=True, padx=2, pady=6)
 
         tab2 = ttk.Frame(self.notebook)
-        self.notebook.add(tab2, text="  🎛 CAP Modulation  ")
+        self.notebook.add(tab2, text="  🎛 CAP 调制  ")
         self.panel_mod = PlotPanel(tab2, self, TAB_MODULATION)
         self.panel_mod.pack(fill=tk.BOTH, expand=True, padx=2, pady=6)
 
         tab3 = ResultsPanel(self.notebook, self)
-        self.notebook.add(tab3, text="  📊 Transmission Results  ")
+        self.notebook.add(tab3, text="  📊 传输实验结果  ")
         self.results_panel = tab3
 
         tab4 = RunPanel(self.notebook, self)
-        self.notebook.add(tab4, text="  ▶ Run Test  ")
+        self.notebook.add(tab4, text="  ▶ 运行测试  ")
         self.panel_run = tab4
 
         tab5 = Keithley2400Panel(self.notebook, self)
@@ -2103,7 +2103,7 @@ class CApGuiApp(tk.Tk):
         self.panel_k2400 = tab5
 
         tab6 = GridScanPanel(self.notebook, self)
-        self.notebook.add(tab6, text="  🔲 Grid Scan  ")
+        self.notebook.add(tab6, text="  🔲 网格扫描  ")
         self.panel_grid = tab6
 
         self.notebook.select(3)
@@ -2179,7 +2179,7 @@ class CApGuiApp(tk.Tk):
     def show_quick_plots(self, data: dict):
         """Display TX-only quick plot data in a modal preview window."""
         win = tk.Toplevel(self)
-        win.title("Quick Plot (TX only)")
+        win.title("快速绘图（仅发射）")
         win.geometry("900x650")
         win.transient(self)
         fig = Figure(figsize=(8, 6), dpi=100)
@@ -2202,31 +2202,31 @@ class CApGuiApp(tk.Tk):
         t_axis = np.arange(sample_len) / fs
 
         ax_tx.plot(t_axis * 1e6, tx[:sample_len])
-        ax_tx.set_title("TX Waveform (first 2000 samples)")
-        ax_tx.set_xlabel("Time (us)")
-        ax_tx.set_ylabel("Amplitude")
+        ax_tx.set_title("发射波形（前 2000 个采样点）")
+        ax_tx.set_xlabel("时间 (us)")
+        ax_tx.set_ylabel("幅度")
 
         ax_rx.plot(t_axis * 1e6, tx[:sample_len])
-        ax_rx.set_title("RX Waveform (TX placeholder)")
-        ax_rx.set_xlabel("Time (us)")
-        ax_rx.set_ylabel("Amplitude")
+        ax_rx.set_title("接收波形（发射占位）")
+        ax_rx.set_xlabel("时间 (us)")
+        ax_rx.set_ylabel("幅度")
 
         nfft = 2 ** int(np.ceil(np.log2(min(len(tx), 8192))))
         f = (np.arange(nfft) - nfft // 2) * fs / nfft / 1e6
         spec = 20 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(tx[:nfft]))) + 1e-12)
         ax_spec.plot(f, spec)
-        ax_spec.set_title("TX Spectrum")
-        ax_spec.set_xlabel("Frequency (MHz)")
-        ax_spec.set_ylabel("Magnitude (dB)")
+        ax_spec.set_title("发射频谱")
+        ax_spec.set_xlabel("频率 (MHz)")
+        ax_spec.set_ylabel("幅度 (dB)")
 
         if sym is not None:
             ax_const.plot(sym.real, sym.imag, "b.", alpha=0.5)
-            ax_const.set_title("TX Constellation")
-            ax_const.set_xlabel("In-phase")
-            ax_const.set_ylabel("Quadrature")
+            ax_const.set_title("发射星座图")
+            ax_const.set_xlabel("同相 I")
+            ax_const.set_ylabel("正交 Q")
             ax_const.grid(True)
         else:
-            ax_const.text(0.5, 0.5, "Constellation\nnot available\nfor multiband",
+            ax_const.text(0.5, 0.5, "多频带模式\n无星座图",
                           ha="center", va="center", transform=ax_const.transAxes)
 
         fig.tight_layout()

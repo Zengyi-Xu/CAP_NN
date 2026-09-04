@@ -1,6 +1,6 @@
-"""LMS and LMS+Volterra equalizers.
+"""LMS 与 LMS+Volterra 均衡器。
 
-Ports MATLAB functions:
+移植自 MATLAB 函数：
   - LMS_1DownS_Testnan.m
   - LMS_volterra_1DownS_Testnan.m
 """
@@ -16,31 +16,31 @@ def lms_equalizer(
     mu_lms: float,
     numof_ts: int,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Symbol-rate LMS linear equalizer.
+    """符号速率 LMS 线性均衡器。
 
     Parameters
     ----------
     rxdata : np.ndarray
-        Received complex symbols (1-D).
+        接收复数符号（一维）。
     txdata : np.ndarray
-        Transmitted complex symbols (1-D), aligned with rxdata.
+        发射复数符号（一维），与 rxdata 对齐。
     taps_lms : int
-        Number of LMS taps (odd).
+        LMS 抽头数（奇数）。
     mu_lms : float
-        LMS step size.
+        LMS 步长。
     numof_ts : int
-        Number of training symbols.
+        训练符号数。
 
     Returns
     -------
     k : np.ndarray
-        Equalised output, same length as rxdata (head/tail padded).
+        均衡输出，与 rxdata 等长（首尾补零填充）。
     y : np.ndarray
-        Training-stage outputs.
+        训练阶段的输出。
     E : np.ndarray
-        Training-stage errors.
+        训练阶段的误差。
     W : np.ndarray
-        Converged LMS tap weights.
+        收敛后的 LMS 抽头权重。
     """
     rxdata = np.asarray(rxdata).flatten()
     txdata = np.asarray(txdata).flatten()
@@ -62,7 +62,7 @@ def lms_equalizer(
     nn = 0
     n = compensation - 1
     while n < ntr:
-        # MATLAB indexing is 1-based; central tap aligned to n-compensation/2+1/2
+        # MATLAB 索引从 1 开始；中心抽头对齐到 n-compensation/2+1/2
         idx = n - half
         X_lms = x[idx - half : idx + half + 1][::-1]
         y[nn] = np.dot(W, X_lms)
@@ -72,7 +72,7 @@ def lms_equalizer(
         n += 1
         nn += 1
 
-    # Apply to whole sequence
+    # 应用到整个序列
     k = np.zeros(len(rxdata), dtype=complex)
     n = compensation - 1
     mm = 0
@@ -83,7 +83,7 @@ def lms_equalizer(
         n += 1
         mm += 1
 
-    # Pad head/tail to preserve length
+    # 首尾补零以保持长度
     head = (compensation - 1) // 2
     tail = len(rxdata) - mm
     k = np.concatenate([rxdata[:head], k[:mm], rxdata[-tail:]]) if tail > 0 else np.concatenate([rxdata[:head], k[:mm]])
@@ -100,32 +100,32 @@ def lms_volterra_equalizer(
     mu_volterra: float,
     numof_ts: int,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Symbol-rate LMS linear + 2nd-order Volterra equalizer.
+    """符号速率 LMS 线性 + 二阶 Volterra 均衡器。
 
     Parameters
     ----------
     rxdata, txdata : np.ndarray
-        Received and transmitted complex symbols.
+        接收与发射复数符号。
     taps_lms : int
-        Linear LMS taps.
+        线性 LMS 抽头数。
     mu_lms : float
-        Linear step size.
+        线性步长。
     taps_volterra : int
-        Volterra memory length.
+        Volterra 记忆长度。
     mu_volterra : float
-        Volterra step size.
+        Volterra 步长。
     numof_ts : int
-        Training length.
+        训练长度。
 
     Returns
     -------
     k : np.ndarray
-        Equalised output.
-    y, E, W : as in lms_equalizer.
+        均衡输出。
+    y, E, W : 同 lms_equalizer。
     V : np.ndarray
-        Converged Volterra kernel (upper-triangular matrix).
+        收敛后的 Volterra 核（上三角矩阵）。
     X_v : np.ndarray
-        Last Volterra input matrix (diagnostic).
+        最后一个 Volterra 输入矩阵（诊断用）。
     """
     rxdata = np.asarray(rxdata).flatten()
     txdata = np.asarray(txdata).flatten()
@@ -168,7 +168,7 @@ def lms_volterra_equalizer(
         n += 1
         nn += 1
 
-    # Apply to whole sequence
+    # 应用到整个序列
     k = np.zeros(len(rxdata), dtype=complex)
     n = compensation - 1
     mm = 0

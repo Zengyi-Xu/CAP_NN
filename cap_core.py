@@ -1,12 +1,12 @@
-"""Carrierless Amplitude Phase (CAP) modulation core.
+"""无载波幅相（CAP）调制核心。
 
-Ports MATLAB functions:
+移植自 MATLAB 函数：
   - CAPmod.m
   - cap_gen.m
   - shaping_fildes.m
   - Pulse_shaping_ZY.m / Gen_CAP_filters_ZY.m
 
-Implements single-band and multi-band CAP transmitters.
+实现单带与多带 CAP 发射机。
 """
 from typing import List, Optional, Tuple, Union
 
@@ -15,9 +15,9 @@ from scipy.signal import convolve, resample_poly, upfirdn
 
 
 def srrc_filter(rolloff: float, span: int, sps: int) -> np.ndarray:
-    """Square-root raised cosine filter.
+    """平方根升余弦（SRRC）滤波器。
 
-    Equivalent to MATLAB ``rcosdesign(rolloff, span, sps, 'sqrt')``.
+    等价于 MATLAB ``rcosdesign(rolloff, span, sps, 'sqrt')``。
     """
     n_taps = span * sps + 1
     t = np.arange(n_taps) - n_taps // 2
@@ -36,7 +36,7 @@ def srrc_filter(rolloff: float, span: int, sps: int) -> np.ndarray:
             num = np.sin(np.pi * ti_norm * (1 - rolloff)) + 4 * rolloff * ti_norm * np.cos(np.pi * ti_norm * (1 + rolloff))
             den = np.pi * ti_norm * (1 - (4 * rolloff * ti_norm) ** 2)
             h[i] = num / den
-    # Normalise energy to 1
+    # 将能量归一化为 1
     h = h / np.sqrt(np.sum(h ** 2))
     return h
 
@@ -46,9 +46,9 @@ def srrc_filter_full(
     upsamplesymbol: int,
     upsampleno: int,
 ) -> np.ndarray:
-    """Generate full-length SRRC at the sample rate and truncate if needed.
+    """按采样率生成全长度 SRRC 滤波器，必要时截断。
 
-    Matches the MATLAB gtr computation in cap_gen.m / Pulse_shaping_ZY.m.
+    与 MATLAB cap_gen.m / Pulse_shaping_ZY.m 中的 gtr 计算一致。
     """
     t_norm = np.arange(upsamplesymbol, dtype=float) - upsamplesymbol / 2.0
     r = 1.0 / upsampleno
@@ -61,11 +61,11 @@ def srrc_filter_full(
         gtr2 = gtr1 / (1 - x ** 2)
         gtr = gtr2 * 4 * rolloff / np.pi
 
-    # Special case: centre tap
+    # 特殊情况：中心抽头
     centre_idx = upsamplesymbol // 2
     gtr[centre_idx] = 1 + rolloff * (4 / np.pi - 1)
 
-    # Special case: x = ±1 (|t_norm * r| = 1 / (4*rolloff))
+    # 特殊情况：x = ±1（|t_norm * r| = 1 / (4*rolloff)）
     special_mask = np.isclose(np.abs(x), 1.0) & (np.arange(upsamplesymbol) != centre_idx)
     gtr[special_mask] = (rolloff / np.sqrt(2)) * (
         (1 + 2 / np.pi) * np.sin(np.pi / (4 * rolloff))
@@ -75,23 +75,23 @@ def srrc_filter_full(
 
 
 def shaping_filter(rolloff: float, span: int, sps: int, shape: str = "srrc") -> np.ndarray:
-    """Generate pulse shaping filter.
+    """生成脉冲成形滤波器。
 
-    Parameters
+    参数
     ----------
     rolloff : float
-        Roll-off factor.
+        滚降系数。
     span : int
-        Filter span in symbols.
+        滤波器跨度（以符号为单位）。
     sps : int
-        Samples per symbol.
+        每符号采样点数。
     shape : str
-        "rc", "srrc", or "btn".
+        "rc"、"srrc" 或 "btn"。
 
-    Returns
+    返回
     -------
     h : np.ndarray
-        1-D real filter coefficients.
+        一维实数滤波器系数。
     """
     shape = shape.lower()
     if shape.startswith("srrc"):
@@ -99,11 +99,11 @@ def shaping_filter(rolloff: float, span: int, sps: int, shape: str = "srrc") -> 
     if shape.startswith("rc"):
         # MATLAB rcosdesign(..., 'normal')
         h = srrc_filter(rolloff, span, sps)
-        # RC is the convolution of two SRRC filters; approximate via scipy
+        # RC 滤波器可由两个 SRRC 滤波器卷积得到；用 scipy 近似
         h_rc = np.convolve(h, h)
         return h_rc / np.sqrt(np.sum(h_rc ** 2))
     if shape.startswith("btn"):
-        # BTN filter from Paul Haigh's CAP paper
+        # 来自 Paul Haigh 的 CAP 论文的 BTN 滤波器
         delay = span * sps // 2
         t = (np.arange(-delay, delay + 1)) / sps
         h = (
@@ -112,7 +112,7 @@ def shaping_filter(rolloff: float, span: int, sps: int, shape: str = "srrc") -> 
             / ((np.pi * rolloff * t / np.log(2)) ** 2 + 1)
         )
         return h / np.sqrt(np.sum(h ** 2))
-    raise ValueError(f"Unknown shape: {shape}")
+    raise ValueError(f"未知的脉冲形状: {shape}")
 
 
 def capmod(
@@ -123,27 +123,27 @@ def capmod(
     taps: int,
     upsampleno: int,
 ) -> np.ndarray:
-    """Single-band CAP modulator (ports CAPmod.m).
+    """单带 CAP 调制器（移植自 CAPmod.m）。
 
-    Parameters
+    参数
     ----------
     complex_sym : np.ndarray
-        1-D complex symbol sequence.
+        一维复数符号序列。
     gt : np.ndarray
-        Real baseband shaping filter (SRRC), length == taps.
+        实数基带成形滤波器（SRRC），长度 == taps。
     t : np.ndarray
-        Time vector corresponding to filter taps, centred at 0.
+        与滤波器抽头对应的时间向量，以 0 为中心。
     fc : float
-        Carrier frequency for this CAP band (Hz).
+        该 CAP 子带的载波频率（Hz）。
     taps : int
-        Filter length (odd).
+        滤波器长度（奇数）。
     upsampleno : int
-        Upsampling factor.
+        上采样因子。
 
-    Returns
+    返回
     -------
     cap_signal : np.ndarray
-        Real passband CAP waveform, power-normalised to 1.
+        实数通带 CAP 波形，功率归一化为 1。
     """
     complex_sym = np.asarray(complex_sym).flatten()
     gtI = gt * np.cos(2 * np.pi * fc * t)
@@ -154,7 +154,7 @@ def capmod(
     Idata[::upsampleno] = complex_sym.real
     Qdata[::upsampleno] = complex_sym.imag
 
-    # Circular extension for filter transient
+    # 为吸收滤波器瞬态做循环扩展
     half = (taps - 1) // 2
     Idata_ext = np.concatenate([Idata[-half:], Idata, Idata[:half]])
     Qdata_ext = np.concatenate([Qdata[-half:], Qdata, Qdata[:half]])
@@ -177,9 +177,9 @@ def capmod_db(
     fc: float,
     upsampleno: int,
 ) -> np.ndarray:
-    """CAP modulator variant used in duo-binary CAP (ports mdb_mod.m).
+    """双二进制 CAP 使用的调制器变体（移植自 mdb_mod.m）。
 
-    Applies pulse shaping first, then heterodynes real/imag parts separately.
+    先做脉冲成形，再分别对实部/虚部进行混频搬移。
     """
     complex_sym = np.asarray(complex_sym).flatten()
     up_data = np.zeros(len(complex_sym) * upsampleno, dtype=complex)
@@ -197,29 +197,29 @@ def multiband_cap_parameters(
     cf: float,
     fs: float,
 ) -> Tuple[np.ndarray, int, int]:
-    """Compute multi-band CAP parameters (ports main_CAP_3band_totalB.m setup).
+    """计算多带 CAP 参数（移植自 main_CAP_3band_totalB.m 的设置部分）。
 
-    Parameters
+    参数
     ----------
     Rs : float
-        Aggregate baud rate (symbols/s).
+        总符号速率（symbols/s）。
     m : int
-        Number of bands.
+        子带个数。
     rolloff : float
-        Roll-off factor.
+        滚降系数。
     cf : float
-        Compression factor (0 < cf < 1). Smaller -> more spectral overlap.
+        压缩因子（0 < cf < 1）。越小 -> 频谱重叠越多。
     fs : float
-        Sampling rate (Hz).
+        采样率（Hz）。
 
-    Returns
+    返回
     -------
     fc : np.ndarray
-        Centre frequencies of each band (Hz), ordered from high to low.
+        各子带中心频率（Hz），按从高到低排序。
     upsampleno : int
-        Total upsampling factor = round(m * fs / Rs).
+        总上采样因子 = round(m * fs / Rs)。
     taps : int
-        Filter length = span * upsampleno + 1.
+        滤波器长度 = span * upsampleno + 1。
     """
     Bcap = Rs * (1 + rolloff)
     fc = np.zeros(m)
@@ -240,44 +240,44 @@ def generate_multiband_cap(
     span: int = 8,
     shape: str = "srrc",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Generate multi-band CAP transmit waveform.
+    """生成多带 CAP 发射波形。
 
-    Parameters
+    参数
     ----------
     symbols_per_band : list of np.ndarray
-        Complex symbol sequence for each band. All must have the same length.
+        每个子带的复数符号序列，长度必须一致。
     Rs : float
-        Aggregate baud rate (symbols/s).
+        总符号速率（symbols/s）。
     fs : float
-        Sampling rate (Hz).
+        采样率（Hz）。
     rolloff : float
-        Roll-off factor.
+        滚降系数。
     cf : float
-        Compression factor.
+        压缩因子。
     span : int
-        Filter span in symbols.
+        滤波器跨度（以符号为单位）。
     shape : str
-        Pulse shape: "srrc", "rc", "btn".
+        脉冲形状："srrc"、"rc"、"btn"。
 
-    Returns
+    返回
     -------
     tx_signal : np.ndarray
-        Power-normalised multi-band CAP waveform.
+        功率归一化的多带 CAP 波形。
     fc : np.ndarray
-        Centre frequencies used for each band.
+        各子带使用的中心频率。
     gt : np.ndarray
-        Baseband shaping filter.
+        基带成形滤波器。
     t : np.ndarray
-        Filter time vector.
+        滤波器时间向量。
     band_signals : np.ndarray
-        2-D array (num_bands, N) of individual band signals before summation.
+        叠加前的各子带信号，二维数组（num_bands, N）。
     """
     m = len(symbols_per_band)
     if m == 0:
-        raise ValueError("At least one band required")
+        raise ValueError("至少需要 1 个子带")
     numofsymbols = len(symbols_per_band[0])
     if any(len(s) != numofsymbols for s in symbols_per_band):
-        raise ValueError("All bands must have the same number of symbols")
+        raise ValueError("所有子带的符号数必须相同")
 
     Bcap = Rs * (1 + rolloff)
     fc = np.zeros(m)
@@ -291,7 +291,7 @@ def generate_multiband_cap(
 
     upsamplesymbol = numofsymbols * upsampleno
     gt_full = srrc_filter_full(rolloff, upsamplesymbol, upsampleno)
-    # Truncate to taps, centred
+    # 截断到 taps 长度，保持居中
     centre = upsamplesymbol // 2
     half = (taps - 1) // 2
     gt = gt_full[centre - half : centre + half + 1]
@@ -317,37 +317,37 @@ def generate_singleband_cap(
     taps: int = 35,
     shape: str = "srrc",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Generate single-band CAP transmit waveform (ports oldcapAPSKTxRx20220406.m).
+    """生成单带 CAP 发射波形（移植自 oldcapAPSKTxRx20220406.m）。
 
-    Parameters
+    参数
     ----------
     symbols : np.ndarray
-        1-D complex symbol sequence.
+        一维复数符号序列。
     fs : float
-        Sampling rate (Hz).
+        采样率（Hz）。
     Rs : float
-        Symbol rate (symbols/s).
+        符号速率（symbols/s）。
     rolloff : float
-        Roll-off factor.
+        滚降系数。
     subcar : float
-        Normalised carrier placement parameter (0.5 centres the band).
+        归一化载波位置参数（0.5 表示子带居中）。
     start_freq : float
-        Additional low-frequency offset in normalised units.
+        额外的低频偏移（归一化单位）。
     taps : int
-        Filter length (odd).
+        滤波器长度（奇数）。
     shape : str
-        Pulse shape.
+        脉冲形状。
 
-    Returns
+    返回
     -------
     tx_signal : np.ndarray
-        Power-normalised CAP waveform.
+        功率归一化的 CAP 波形。
     filter_I : np.ndarray
-        I-path shaping filter.
+        I 路成形滤波器。
     filter_Q : np.ndarray
-        Q-path shaping filter.
+        Q 路成形滤波器。
     t : np.ndarray
-        Full-length filter time vector.
+        全长度滤波器时间向量。
     """
     symbols = np.asarray(symbols).flatten()
     upsampleno = int(round(fs / Rs))
@@ -356,7 +356,7 @@ def generate_singleband_cap(
     t_norm = np.arange(upsamplesymbol, dtype=float) - upsamplesymbol / 2.0
     t = t_norm / fs
 
-    # Normalised symbol rate = 1/upsampleno
+    # 归一化符号速率 = 1/upsampleno
     r = 1.0 / upsampleno
     gtr = srrc_filter_full(rolloff, upsamplesymbol, upsampleno)
 
@@ -366,7 +366,7 @@ def generate_singleband_cap(
     filter_I_full = gtr * np.cos(2 * np.pi * subcar1 * t_norm * r)
     filter_Q_full = gtr * np.sin(2 * np.pi * subcar1 * t_norm * r)
 
-    # Truncate to requested taps, centred
+    # 截断到指定 taps 长度，保持居中
     centre = upsamplesymbol // 2
     half = taps // 2
     filter_I = filter_I_full[centre - half : centre + half + 1]

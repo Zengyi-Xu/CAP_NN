@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Simple BiGRU post-equalizer for multi-band CAP.
+"""多频带 CAP 的简单 BiGRU 后均衡器。
 
-Input:  received multi-band CAP waveform samples (Rxdata_NN1.txt)
-Output: transmitted symbols for each band, real/imag interleaved
-        (Rxdata_afterNN1.txt, shape (N, 6))
+输入：接收到的多频带 CAP 波形采样（Rxdata_NN1.txt）
+输出：各频带的发送符号，实部/虚部交错排列
+      （Rxdata_afterNN1.txt，形状为 (N, 6)）
 
-Ports the SCAP_DNNpy2 workflow from MATLAB main_CAP_3band_totalB.m.
+移植自 MATLAB main_CAP_3band_totalB.m 的 SCAP_DNNpy2 工作流。
 """
 import os
 import sys
@@ -63,8 +63,8 @@ def main():
         "epochs": 20,
         "batch_size": 256,
         "ratio": 0.3,
-        "output_dim": 6,          # 3 bands x (real, imag)
-        "tap_num": 91,            # input feature window length
+        "output_dim": 6,          # 3 个频带 ×（实部，虚部）
+        "tap_num": 91,            # 输入特征窗口长度
         "time_step": 15,
         "hidden_size": 128,
         "seed": 15,
@@ -79,12 +79,12 @@ def main():
         torch.cuda.manual_seed_all(config["seed"])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    print(f"使用的设备: {device}")
 
     data_tx = np.loadtxt("./Txdata_NN.txt")  # (N, 6)
-    data_rx = np.loadtxt("./Rxdata_NN1.txt")  # (N, 6) matched-filter outputs
+    data_rx = np.loadtxt("./Rxdata_NN1.txt")  # (N, 6) 匹配滤波输出
 
-    # Normalise per column
+    # 逐列归一化
     tx_max = np.max(np.abs(data_tx), axis=0, keepdims=True)
     rx_max = np.max(np.abs(data_rx), axis=0, keepdims=True)
     tx_max[tx_max == 0] = 1.0
@@ -98,7 +98,7 @@ def main():
     x_test_temp = data_rx[n_train:]
     y_test_temp = data_tx[n_train:]
 
-    # Build windows: for each output sample at index k, use rx[k:k+tap_num]
+    # 构建窗口：索引 k 处的每个输出样本使用 rx[k:k+tap_num]
     tap_num = config["tap_num"]
     time_step = config["time_step"]
     output_dim = config["output_dim"]
@@ -108,14 +108,14 @@ def main():
         y_win = []
         for k in range(len(x) - tap_num + 1):
             x_win.append(x[k:k + tap_num])
-            # Target is the centre sample of the window
+            # 目标是窗口的中心样本
             centre = k + tap_num // 2
             if centre < len(y):
                 y_win.append(y[centre])
             else:
                 y_win.append(y[-1])
         x_seq = split_sequence(np.array(x_win), time_step)
-        # Align y: each x_seq[i] corresponds to windows i..i+time_step-1
+        # 对齐 y：每个 x_seq[i] 对应窗口 i..i+time_step-1
         y_seq = np.array(y_win[time_step - 1:])
         return x_seq, y_seq
 
@@ -148,7 +148,7 @@ def main():
     for epoch in range(config["epochs"]):
         model.train()
         epoch_train_loss = 0.0
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config['epochs']}",
+        progress_bar = tqdm(train_loader, desc=f"第 {epoch + 1}/{config['epochs']} 轮",
                             leave=False, disable=disable_tqdm)
         for inputs, targets in progress_bar:
             optimizer.zero_grad()
@@ -157,7 +157,7 @@ def main():
             loss.backward()
             optimizer.step()
             epoch_train_loss += loss.item()
-            progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+            progress_bar.set_postfix({"损失": f"{loss.item():.4f}"})
 
         avg_train_loss = epoch_train_loss / len(train_loader)
 
@@ -173,23 +173,23 @@ def main():
 
         _nn_progress(epoch=epoch + 1, total=config["epochs"],
                      train_loss=avg_train_loss, val_loss=avg_val_loss)
-        print(f"Epoch {epoch + 1}/{config['epochs']}  train_loss={avg_train_loss:.6f}  val_loss={avg_val_loss:.6f}")
+        print(f"第 {epoch + 1}/{config['epochs']} 轮  训练损失={avg_train_loss:.6f}  验证损失={avg_val_loss:.6f}")
 
-    # Predict on full received data
+    # 在完整接收数据上进行预测
     model.eval()
     x_full, _ = build_windows(data_rx, data_tx)
     x_full_t = torch.FloatTensor(x_full).to(device)
     with torch.no_grad():
         predictions = model(x_full_t).cpu().numpy()
 
-    # Denormalise
+    # 反归一化
     predictions = predictions * tx_max[time_step - 1:time_step - 1 + len(predictions)]
     np.savetxt("./Rxdata_afterNN1.txt", predictions)
-    print(f"Saved predictions to ./Rxdata_afterNN1.txt, shape {predictions.shape}")
+    print(f"预测结果已保存到 ./Rxdata_afterNN1.txt，形状为 {predictions.shape}")
 
     if config["save_model"]:
         torch.save(model.state_dict(), config["model_path"])
-        print(f"Saved model to {config['model_path']}")
+        print(f"模型已保存到 {config['model_path']}")
 
 
 if __name__ == "__main__":

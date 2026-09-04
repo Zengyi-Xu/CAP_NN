@@ -1,6 +1,6 @@
-"""Visible-light communication channel model.
+"""可见光通信信道模型。
 
-Ports MATLAB function:
+移植自 MATLAB 函数：
   - vlc_channel.m
 """
 from typing import Optional
@@ -16,34 +16,34 @@ def vlc_channel(
     nonlinear: bool = False,
     vpp: float = 1.2,
 ) -> np.ndarray:
-    """Apply VLC channel model with optional LED nonlinearity and frequency fading.
+    """应用 VLC 信道模型，可选 LED 非线性和频率衰落。
 
     Parameters
     ----------
     data_in : np.ndarray
-        Input waveform (real).
+        输入波形（实数）。
     snr_db : float
-        Target SNR in dB after channel.
+        信道之后的目标 SNR（dB）。
     fs_hz : float
-        Parameter controlling the exponential decay bandwidth in MATLAB code
-        (named Fs in vlc_channel.m).
+        控制指数衰减带宽的参数（MATLAB 代码中名为 Fs，
+        即 vlc_channel.m 中的 Fs）。
     factor : float
-        Decay factor; larger -> wider bandwidth / less fading.
+        衰减因子；越大 -> 带宽越宽 / 衰落越小。
     nonlinear : bool
-        Whether to apply the weak LED nonlinearity model.
+        是否应用弱 LED 非线性模型。
     vpp : float
-        Peak-to-peak voltage used for nonlinearity scaling.
+        用于非线性缩放的峰峰值电压。
 
     Returns
     -------
     data_rx : np.ndarray
-        Real received waveform with AWGN added.
+        加入 AWGN 后的实数接收波形。
     """
     data_tx = np.asarray(data_in, dtype=float).flatten()
 
     if nonlinear:
         x = data_tx / (np.max(data_tx) - np.min(data_tx)) * 2 * vpp
-        # Weak NL model from MATLAB
+        # 来自 MATLAB 的弱非线性模型
         data_tx = 4.412 / (1.0 + np.exp(-1.07 * x)) - 2.206
         data_tx = data_tx / np.sqrt(np.mean(data_tx ** 2))
 
@@ -60,7 +60,7 @@ def vlc_channel(
     data_ch_ifft = np.real(np.fft.ifft(data_ch_after))
     data_tx = data_ch_ifft - np.mean(data_ch_ifft)
 
-    # AWGN with measured power
+    # 按实测功率添加 AWGN
     sig_power = np.mean(data_tx ** 2)
     noise_power = sig_power / (10 ** (snr_db / 10))
     noise = np.sqrt(noise_power) * np.random.randn(len(data_tx))

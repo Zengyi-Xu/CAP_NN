@@ -1,18 +1,18 @@
-"""Virtual channel simulation.
+"""虚拟信道仿真。
 
-Used for code debugging and maintenance without an M8190A/oscilloscope.
-Includes:
-1. First-order low-pass response (simulates TX high-frequency roll-off)
-2. Receiver additive white Gaussian noise
-3. Receiver third-order nonlinear distortion
-4. Integer sample delay
+用于在没有 M8190A/示波器的情况下进行代码调试和维护。
+包括：
+1. 一阶低通响应（模拟发送端高频滚降）
+2. 接收端加性高斯白噪声
+3. 接收端三阶非线性失真
+4. 整数采样延迟
 """
 import numpy as np
 import config
 
 
 class VirtualChannel:
-    """Virtual channel."""
+    """虚拟信道。"""
 
     def __init__(self,
                  fs: float = config.AWG_SAMPLE_RATE,
@@ -24,13 +24,13 @@ class VirtualChannel:
                  seed: int = None):
         """
         Args:
-            fs: sample rate (Hz)
-            fc: first-order low-pass cutoff frequency (Hz)
-            snr_db: receiver SNR (dB)
-            nonlin_coeff: third-order nonlinearity coefficient
-            delay: integer sample delay
-            attenuation: linear amplitude attenuation
-            seed: random seed, None means not fixed
+            fs: 采样率 (Hz)
+            fc: 一阶低通截止频率 (Hz)
+            snr_db: 接收端 SNR (dB)
+            nonlin_coeff: 三阶非线性系数
+            delay: 整数采样延迟
+            attenuation: 线性幅度衰减
+            seed: 随机种子，None 表示不固定
         """
         self.fs = fs
         self.fc = fc
@@ -41,7 +41,7 @@ class VirtualChannel:
         self.rng = np.random.default_rng(seed)
 
     def first_order_lpf(self, x: np.ndarray) -> np.ndarray:
-        """First-order low-pass in frequency domain: H(f) = 1 / (1 + j f/fc)."""
+        """频域一阶低通：H(f) = 1 / (1 + j f/fc)。"""
         x = np.asarray(x).ravel()
         N = len(x)
         freqs = np.fft.fftfreq(N, d=1.0 / self.fs)
@@ -49,7 +49,7 @@ class VirtualChannel:
         return np.real(np.fft.ifft(np.fft.fft(x) * H))
 
     def add_noise(self, x: np.ndarray) -> np.ndarray:
-        """Add AWGN according to SNR."""
+        """按 SNR 添加 AWGN。"""
         x = np.asarray(x).ravel()
         sig_pow = np.mean(x ** 2)
         noise_pow = sig_pow / (10.0 ** (self.snr_db / 10.0))
@@ -57,14 +57,14 @@ class VirtualChannel:
         return x + noise
 
     def apply_nonlinearity(self, x: np.ndarray) -> np.ndarray:
-        """Third-order nonlinearity: y = x + coeff * x^3."""
+        """三阶非线性：y = x + coeff * x^3。"""
         x = np.asarray(x).ravel()
         return x + self.nonlin_coeff * x ** 3
 
     def apply(self, x: np.ndarray) -> np.ndarray:
-        """Apply in order: attenuation -> first-order LPF -> nonlinearity -> noise -> delay.
+        """按顺序应用：衰减 -> 一阶低通 -> 非线性 -> 加噪 -> 延迟。
 
-        Zero-pad both ends so the output is longer than the input, facilitating cross-correlation synchronization.
+        在两端补零，使输出比输入更长，便于互相关同步。
         """
         x = np.asarray(x).ravel()
         y = x * self.attenuation
@@ -73,12 +73,12 @@ class VirtualChannel:
         y = self.add_noise(y)
         if self.delay != 0:
             y = np.roll(y, self.delay)
-        # Zero-pad for synchronization
+        # 为同步补零
         pad = max(100, 4 * abs(self.delay))
         return np.concatenate([np.zeros(pad), y, np.zeros(pad)])
 
     def channel_response(self, N: int = 8192) -> tuple:
-        """Return channel frequency response for plotting/analysis."""
+        """返回用于绘图/分析的信道频率响应。"""
         freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1.0 / self.fs))
         H = 1.0 / (1.0 + 1j * freqs / self.fc)
         return freqs, H
@@ -92,7 +92,7 @@ def apply_virtual_channel(x: np.ndarray,
                           delay: int = config.VIRTUAL_CHANNEL_DELAY,
                           attenuation: float = config.VIRTUAL_CHANNEL_ATTENUATION,
                           seed: int = None) -> np.ndarray:
-    """Convenience function: apply the complete virtual channel to a waveform."""
+    """便捷函数：对波形应用完整的虚拟信道。"""
     ch = VirtualChannel(fs=fs, fc=fc, snr_db=snr_db,
                         nonlin_coeff=nonlin_coeff, delay=delay,
                         attenuation=attenuation, seed=seed)

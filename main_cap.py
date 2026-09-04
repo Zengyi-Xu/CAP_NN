@@ -1,8 +1,8 @@
-"""CLI entry point for UW_APSK CAP transceiver.
+"""UW_APSK CAP 收发机的命令行入口。
 
-Provides two modes:
-  1. Single-band CAP (oldcapAPSKTxRx20220406.m equivalent)
-  2. Multi-band CAP (main_CAP_3band_totalB.m equivalent)
+提供两种模式：
+  1. 单带 CAP（等效于 oldcapAPSKTxRx20220406.m）
+  2. 多带 CAP（等效于 main_CAP_3band_totalB.m）
 """
 import argparse
 from pathlib import Path
@@ -21,10 +21,10 @@ from utils import load_txt, save_txt
 
 
 def _align_lms_output(eq_output: np.ndarray, rx_input: np.ndarray, taps: int) -> np.ndarray:
-    """Extract the valid central LMS output segment aligned with rx_input.
+    """提取与 rx_input 对齐的有效 LMS 中央输出段。
 
-    The LMS equalizer pads the head and tail with raw input samples; the true
-    equalised samples are the central ``len(rx_input) - taps + 1`` samples.
+    LMS 均衡器会在头部和尾部用原始输入样本填充；真正的均衡后样本是
+    中央的 ``len(rx_input) - taps + 1`` 个样本。
     """
     head = (taps - 1) // 2
     mm = len(rx_input) - taps + 1
@@ -38,10 +38,10 @@ def run_singleband(
     snr_db: float = cfg.SB_SNR_DB,
     seed: int = 100,
 ) -> dict:
-    """Run single-band CAP transceiver offline simulation."""
+    """运行单带 CAP 收发机离线仿真。"""
     np.random.seed(seed)
 
-    # ---- TX ----
+    # ---- 发射（TX）----
     dec_data = np.random.randint(0, order, size=numofsymbols)
     qam_data = modulate(dec_data, order, constellation)
 
@@ -55,11 +55,11 @@ def run_singleband(
         taps=cfg.SB_TAPS,
     )
 
-    # Save TX files compatible with MATLAB receiver
+    # 保存与 MATLAB 接收机兼容的发送数据文件
     name = f"data{order}{constellation}"
     save_txt(cfg.TXDATA_DIR / f"{name}.txt", tx_signal)
 
-    # ---- Channel ----
+    # ---- 信道 ----
     if cfg.USE_VIRTUAL_CHANNEL:
         rx_signal = channel.vlc_channel(
             tx_signal,
@@ -71,7 +71,7 @@ def run_singleband(
     else:
         rx_signal = load_txt(cfg.RXDATA_DIR / f"OSC_{name}.txt")
 
-    # ---- Pre-equalization: waveform Volterra ----
+    # ---- 预均衡：波形 Volterra 均衡 ----
     tx_norm = tx_signal / np.sqrt(np.mean(tx_signal ** 2))
     rx_eq, _, _, _, _, _ = lms_volterra_equalizer(
         rx_signal,
@@ -83,13 +83,13 @@ def run_singleband(
         cfg.SB_NUMOF_TS,
     )
 
-    # ---- Matched filtering ----
+    # ---- 匹配滤波 ----
     DataCapI = np.convolve(rx_eq, filter_I, mode="same")
     DataCapQ = np.convolve(rx_eq, filter_Q, mode="same")
     DataCap = DataCapI + 1j * DataCapQ
     match_data = DataCap[::cfg.SB_UPSAMPLENO]
 
-    # ---- Post LMS ----
+    # ---- 后级 LMS 均衡 ----
     eq_data, _, _, _ = lms_equalizer(
         match_data,
         qam_data,
@@ -102,7 +102,7 @@ def run_singleband(
     avp = average_power(order, constellation)
     eq_valid = eq_valid / np.sqrt(np.mean(np.abs(eq_valid) ** 2)) * avp
 
-    # ---- Demod ----
+    # ---- 解调 ----
     head = (cfg.SB_LMS_TAPS - 1) // 2
     mm = len(match_data) - cfg.SB_LMS_TAPS + 1
     decisions = demodulate(eq_valid, order, constellation)
@@ -119,7 +119,7 @@ def run_singleband(
         "ser": ser,
         "ber": ber,
     }
-    print(f"Single-band CAP: SER={ser:.4e}  BER={ber:.4e}")
+    print(f"单带 CAP：符号误码率 SER={ser:.4e}  误码率 BER={ber:.4e}")
     return record
 
 
@@ -132,10 +132,10 @@ def run_multiband(
     use_lms: bool = True,
     use_nn: bool = False,
 ) -> dict:
-    """Run multi-band CAP transceiver offline simulation."""
+    """运行多带 CAP 收发机离线仿真。"""
     rng = np.random.default_rng(seed)
 
-    # ---- TX ----
+    # ---- 发射（TX）----
     decimal_per_band = [rng.integers(0, order, size=numofsymbols) for _ in range(cfg.MB_NUM_BANDS)]
     symbols_per_band = [modulate(dec, order, constellation) for dec in decimal_per_band]
 
@@ -150,7 +150,7 @@ def run_multiband(
     )
     save_txt(cfg.TXDATA_DIR / "up123_data_for_dnn.txt", tx_signal)
 
-    # ---- Channel ----
+    # ---- 信道 ----
     if cfg.USE_VIRTUAL_CHANNEL:
         rx_signal = channel.vlc_channel(
             tx_signal,
@@ -162,7 +162,7 @@ def run_multiband(
     else:
         rx_signal = load_txt(cfg.RXDATA_DIR / "rx_multiband.txt")
 
-    # ---- Matched filter each band ----
+    # ---- 对每个子带做匹配滤波 ----
     upsampleno = int(round(cfg.MB_NUM_BANDS * cfg.MB_FS / cfg.MB_RS))
     taps = cfg.MB_SPAN * upsampleno + 1
     rx_bands = []
@@ -170,16 +170,16 @@ def run_multiband(
         band_sym = cap_rx.capmatch_filter(rx_signal, gt, t, fc[n], taps, upsampleno, 0)
         rx_bands.append(band_sym)
 
-    # Save raw received bands as NN input (real/imag interleaved)
+    # 将原始接收子带保存为 NN 输入（实部/虚部交错）
     nn_input = np.hstack([np.column_stack([rb.real, rb.imag]) for rb in rx_bands])
     save_txt(cfg.NN_RX1_FILE, nn_input)
 
-    # Save labels for NN training
+    # 保存 NN 训练用的标签
     tx_labels = np.hstack([np.column_stack([s.real, s.imag]) for s in symbols_per_band])
     save_txt(cfg.NN_TX_FILE, tx_labels)
     save_txt(cfg.DATA_DIR / "ydata_for_dnn.txt", tx_labels)
 
-    # ---- BER per band ----
+    # ---- 各子带误码率 ----
     raw_sers = []
     raw_bers = []
     eq_sers = []
@@ -190,7 +190,7 @@ def run_multiband(
     train_len = min(4000, numofsymbols // 2)
 
     for n in range(cfg.MB_NUM_BANDS):
-        # Raw matched-filter performance
+        # 原始匹配滤波性能
         _, ser_raw, ber_raw = cap_rx.demodulate_with_ber(
             rx_bands[n], order, constellation, symbols_per_band[n]
         )
@@ -216,7 +216,7 @@ def run_multiband(
             eq_sers.append(ser_eq)
             eq_bers.append(ber_eq)
 
-    # ---- NN post-equalizer (optional) ----
+    # ---- NN 后级均衡器（可选） ----
     nn_sers = []
     nn_bers = []
     if use_nn:
@@ -224,7 +224,7 @@ def run_multiband(
             nn_output = run_cap_nn_equalizer(tx_labels, nn_input)
             for n in range(cfg.MB_NUM_BANDS):
                 rx_nn = nn_output[:, 2 * n] + 1j * nn_output[:, 2 * n + 1]
-                # Align length with transmitted symbols (NN drops head samples due to windowing)
+                # 与发送符号对齐长度（NN 因加窗会丢弃头部样本）
                 valid_len = min(len(rx_nn), numofsymbols)
                 decisions = demodulate(rx_nn[:valid_len], order, constellation)
                 tx_valid = decimal_per_band[n][:valid_len]
@@ -237,7 +237,7 @@ def run_multiband(
             record["nn_ber"] = nn_bers
             record["nn_ber_avg"] = float(np.mean(nn_bers))
         except Exception as exc:
-            print(f"NN equalizer skipped/failed: {exc}")
+            print(f"NN 均衡器已跳过/失败：{exc}")
 
     record = {
         "mode": "multiband",
@@ -257,27 +257,27 @@ def run_multiband(
         record["nn_ber"] = nn_bers
         record["nn_ber_avg"] = float(np.mean(nn_bers))
 
-    print(f"Multi-band CAP raw BER per band: {raw_bers}")
-    print(f"Multi-band CAP average raw BER: {np.mean(raw_bers):.4e}")
+    print(f"多带 CAP 各子带原始 BER：{raw_bers}")
+    print(f"多带 CAP 平均原始 BER：{np.mean(raw_bers):.4e}")
     if use_lms:
-        print(f"Multi-band CAP LMS BER per band: {eq_bers}")
-        print(f"Multi-band CAP average LMS BER: {np.mean(eq_bers):.4e}")
+        print(f"多带 CAP LMS 均衡后各子带 BER：{eq_bers}")
+        print(f"多带 CAP LMS 均衡后平均 BER：{np.mean(eq_bers):.4e}")
     if nn_sers:
-        print(f"Multi-band CAP NN BER per band: {nn_bers}")
-        print(f"Multi-band CAP average NN BER: {np.mean(nn_bers):.4e}")
+        print(f"多带 CAP NN 均衡后各子带 BER：{nn_bers}")
+        print(f"多带 CAP NN 均衡后平均 BER：{np.mean(nn_bers):.4e}")
     return record
 
 
 def main():
-    parser = argparse.ArgumentParser(description="UW_APSK CAP Python transceiver")
+    parser = argparse.ArgumentParser(description="UW_APSK CAP Python 收发机")
     parser.add_argument("--mode", choices=["singleband", "multiband"], default="singleband")
     parser.add_argument("--order", type=int, default=None)
     parser.add_argument("--constellation", choices=["APSK", "QAM"], default=None)
     parser.add_argument("--snr", type=float, default=None)
     parser.add_argument("--seed", type=int, default=100)
-    parser.add_argument("--no-virtual", action="store_true", help="Read RX from file instead of virtual channel")
-    parser.add_argument("--no-lms", action="store_true", help="Disable per-band LMS in multiband mode")
-    parser.add_argument("--use-nn", action="store_true", help="Run CAP NN post-equalizer in multiband mode (requires torch)")
+    parser.add_argument("--no-virtual", action="store_true", help="从文件读取接收数据，而不是使用虚拟信道")
+    parser.add_argument("--no-lms", action="store_true", help="在多带模式下禁用各子带 LMS 均衡")
+    parser.add_argument("--use-nn", action="store_true", help="在多带模式下运行 CAP NN 后级均衡器（需要 torch）")
     args = parser.parse_args()
 
     if args.no_virtual:

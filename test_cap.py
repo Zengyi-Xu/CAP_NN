@@ -1,4 +1,4 @@
-"""Unit/integration tests for UW_APSK CAP Python transceiver."""
+"""UW_APSK CAP Python 收发机的单元/集成测试。"""
 import numpy as np
 
 import cap_core
@@ -14,8 +14,8 @@ def test_constellation_roundtrip():
             dec = np.arange(order)
             sym = modulate(dec, order, const)
             dec2 = demodulate(sym, order, const)
-            assert np.array_equal(dec, dec2), f"{order}-{const} roundtrip failed"
-    print("PASS: constellation roundtrip")
+            assert np.array_equal(dec, dec2), f"{order}-{const} 往返测试失败"
+    print("PASS: 星座图往返")
 
 
 def test_singleband_golden_reference():
@@ -28,8 +28,8 @@ def test_singleband_golden_reference():
     m = matlab_tx / np.sqrt(np.mean(matlab_tx ** 2))
     p = tx_py / np.sqrt(np.mean(tx_py ** 2))
     max_diff = np.max(np.abs(m - p))
-    assert max_diff < 1e-6, f"single-band waveform mismatch: {max_diff}"
-    print(f"PASS: single-band golden reference (max diff {max_diff:.3e})")
+    assert max_diff < 1e-6, f"单频带波形不一致: {max_diff}"
+    print(f"PASS: 单频带金标准参考 (最大差异 {max_diff:.3e})")
 
 
 def test_singleband_roundtrip():
@@ -51,8 +51,8 @@ def test_singleband_roundtrip():
     eq_valid = eq_valid / np.sqrt(np.mean(np.abs(eq_valid) ** 2)) * avp
     decisions = demodulate(eq_valid, order, "QAM")
     ser = np.mean(decisions != dec[head : head + mm])
-    assert ser < 0.01, f"single-band roundtrip SER too high: {ser}"
-    print(f"PASS: single-band roundtrip SER={ser:.4e}")
+    assert ser < 0.01, f"单频带回环误码率过高: {ser}"
+    print(f"PASS: 单频带回环 SER={ser:.4e}")
 
 
 def test_multiband_modulation():
@@ -65,7 +65,7 @@ def test_multiband_modulation():
     )
     assert len(tx) == num * int(round(3 * 1.2e9 / 300e6))
     assert np.isclose(np.mean(tx ** 2), 1.0, atol=1e-6)
-    print("PASS: multiband modulation")
+    print("PASS: 多频带调制")
 
 
 def test_multiband_separation():
@@ -89,8 +89,8 @@ def test_multiband_separation():
             [np.argmin(np.abs(s - modulate(np.arange(order), order, "QAM"))) for s in syms[n][head : head + mm]]
         )
         ser = np.mean(decisions != dec_tx)
-        assert ser < 0.1, f"multiband band {n} SER too high: {ser}"
-    print("PASS: multiband separation with LMS")
+        assert ser < 0.1, f"多频带第 {n} 频带误码率过高: {ser}"
+    print("PASS: 基于 LMS 的多频带分离")
 
 
 if __name__ == "__main__":
@@ -99,4 +99,4 @@ if __name__ == "__main__":
     test_singleband_roundtrip()
     test_multiband_modulation()
     test_multiband_separation()
-    print("\nAll tests passed.")
+    print("\n全部测试通过。")

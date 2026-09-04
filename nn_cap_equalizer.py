@@ -1,6 +1,6 @@
-"""NN post-equalizer wrapper for multi-band CAP.
+"""多频带 CAP 的 NN 后均衡器封装。
 
-Calls data/nn/CAP_multiband_NN.py in a subprocess and reads the output symbols.
+以子进程方式调用 data/nn/CAP_multiband_NN.py，并读取输出符号。
 """
 import os
 import subprocess
@@ -16,7 +16,7 @@ from utils import load_txt, save_txt
 
 
 class CAPNNEqualizer:
-    """Wrapper for CAP_multiband_NN.py."""
+    """CAP_multiband_NN.py 的封装。"""
 
     def __init__(
         self,
@@ -34,24 +34,24 @@ class CAPNNEqualizer:
         rx_symbols: np.ndarray,
         output_name: str = "Rxdata_afterNN1.txt",
     ) -> np.ndarray:
-        """Run NN equalization.
+        """运行 NN 均衡。
 
         Parameters
         ----------
         tx_symbols : np.ndarray
-            Transmitted symbols, shape (N, 6) with real/imag interleaved per band.
+            发射符号，形状 (N, 6)，各频带实部/虚部交错排列。
         rx_symbols : np.ndarray
-            Received (matched-filter) symbols, shape (N, 6).
+            接收（匹配滤波后）符号，形状 (N, 6)。
         output_name : str
-            Output filename to read predictions from.
+            用于读取预测结果的输出文件名。
 
         Returns
         -------
         np.ndarray
-            NN-equalised symbols, shape (M, 6).
+            NN 均衡后的符号，形状 (M, 6)。
         """
         if not self.script.exists():
-            raise FileNotFoundError(f"NN script not found: {self.script}")
+            raise FileNotFoundError(f"未找到 NN 脚本: {self.script}")
 
         save_txt(self.nn_dir / "Txdata_NN.txt", tx_symbols)
         save_txt(self.nn_dir / "Rxdata_NN1.txt", rx_symbols)
@@ -61,7 +61,7 @@ class CAPNNEqualizer:
         env["DISABLE_TQDM"] = "1"
 
         cmd = [self.python_exe, str(self.script)]
-        print(f"Running CAP NN equalizer: {' '.join(cmd)}")
+        print(f"正在运行 CAP NN 均衡器: {' '.join(cmd)}")
         proc = subprocess.Popen(
             cmd,
             cwd=str(self.nn_dir),
@@ -83,11 +83,11 @@ class CAPNNEqualizer:
         code = proc.wait()
         reader.join(timeout=2)
         if code != 0:
-            raise RuntimeError(f"NN script failed with return code {code}")
+            raise RuntimeError(f"NN 脚本运行失败，返回码 {code}")
 
         output_file = self.nn_dir / output_name
         if not output_file.exists():
-            raise FileNotFoundError(f"NN output not found: {output_file}")
+            raise FileNotFoundError(f"未找到 NN 输出: {output_file}")
         return load_txt(output_file)
 
 
@@ -96,6 +96,6 @@ def run_cap_nn_equalizer(
     rx_symbols: np.ndarray,
     nn_dir: Path = cfg.NN_DIR,
 ) -> np.ndarray:
-    """Convenience function."""
+    """便捷函数。"""
     eq = CAPNNEqualizer(nn_dir=nn_dir)
     return eq.run(tx_symbols, rx_symbols)
