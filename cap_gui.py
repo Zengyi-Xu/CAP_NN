@@ -68,11 +68,18 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 
 # Preferred UI / plot sans-serif font (ships with Raspberry Pi)
 UI_FONT = "Liberation Sans"
-UI_FONT_FALLBACKS = ["DejaVu Sans", "Liberation Sans"]
+UI_FONT_FALLBACKS = ["Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "DejaVu Sans", "Liberation Sans"]
 
 # Preferred monospace font for code/log areas (ships with Raspberry Pi)
 MONO_FONT = "Liberation Mono Bold"
 MONO_FONT_FALLBACKS = ["Liberation Mono", "DejaVu Sans Mono", "Courier"]
+
+# 绘图字体必须支持中文，否则等高线图/坐标轴标题会乱码
+PLOT_FONT_CANDIDATES = [
+    "Microsoft YaHei", "SimHei", "SimSun", "STSong",
+    "WenQuanYi Micro Hei", "Noto Sans CJK SC", "Source Han Sans SC",
+    "DejaVu Sans",
+]
 
 import matplotlib.font_manager as fm
 
@@ -90,8 +97,9 @@ def _pick_available_font(candidates):
 
 FONT_FAMILY = _pick_available_font([UI_FONT] + UI_FONT_FALLBACKS)
 FONT_MONO = _pick_available_font([MONO_FONT] + MONO_FONT_FALLBACKS)
+PLOT_FONT = _pick_available_font(PLOT_FONT_CANDIDATES)
 
-plt.rcParams["font.sans-serif"] = [FONT_FAMILY] + [f for f in UI_FONT_FALLBACKS if f != FONT_FAMILY]
+plt.rcParams["font.sans-serif"] = [PLOT_FONT] + [f for f in PLOT_FONT_CANDIDATES if f != PLOT_FONT]
 plt.rcParams["axes.unicode_minus"] = False
 
 PROJECT_ROOT = Path(__file__).resolve().parent

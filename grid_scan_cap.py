@@ -39,6 +39,34 @@ GRID_SCAN_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
+# Matplotlib 字体设置（避免等高线图中文乱码，与 DMT_PY_NN 保持一致）
+# ---------------------------------------------------------------------------
+def _setup_plot_fonts():
+    """配置 matplotlib，让中文标签能正确渲染。"""
+    import matplotlib
+    import matplotlib.font_manager as fm
+
+    candidates = [
+        "Microsoft YaHei", "SimHei", "SimSun", "STSong",
+        "WenQuanYi Micro Hei", "Noto Sans CJK SC", "Source Han Sans SC",
+    ]
+    available = []
+    for name in candidates:
+        try:
+            fm.findfont(name, fallback_to_default=False)
+            available.append(name)
+        except Exception:
+            continue
+    if not available:
+        available = ["DejaVu Sans"]
+    matplotlib.rcParams["font.sans-serif"] = available + ["DejaVu Sans"]
+    matplotlib.rcParams["axes.unicode_minus"] = False
+
+
+_setup_plot_fonts()
+
+
+# ---------------------------------------------------------------------------
 # 日志
 # ---------------------------------------------------------------------------
 def _setup_scan_logger(scan_id: str) -> logging.Logger:
