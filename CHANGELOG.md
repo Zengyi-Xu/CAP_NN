@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-09-05
+
+### Added
+
+- **Keithley 2400 GPIB support（同步自 DMT_PY_NN）**
+  - `keithley2400_controller.py` 整体同步 DMT_PY_NN 的重构版：RS-232 与 GPIB（IEEE-488，经 pyvisa + NI-VISA/Keysight VISA）双后端，公共 SCPI 指令集共享；`interface` 参数可选 `"rs232"` / `"gpib"`（`"usb"`、`"gpio"` 作为别名兼容）。
+  - Keithley 2400 面板与网格扫描页新增「通信接口」下拉框（rs232 / gpib），端口列表随接口切换（COM 口列表 / GPIB 资源列表）。
+  - `config_cap.py` 新增 `K2400_INTERFACE = "rs232"`；`GridScanConfig` 新增 `keithley_interface` 字段并做合法性校验。
+
+### Fixed
+
+- **源模式与测量功能互补**：`set_source_mode` 切换源模式时自动把测量功能设为互补端并下发 `:SENS:FUNC`（电压源测电流、电流源测电压），`set_nplc` / `set_range` 不再配错物理量；`set_measure_function` 增加互斥校验，不允许测量与源相同的物理量。
+- **网格扫描页等高线图**：`load_summary` 返回的 header 本身是列表，原代码再调 `.split(",")` 导致选择历史扫描时崩溃；切换指标时旧 colorbar 不消失导致主图越挤越小——两处均已按 DMT_GUI 的修复方式同步（重绘前显式移除旧 colorbar）。
+- GUI 启动时自动选中最新扫描并绘制等高线，上述崩溃即在此时触发，现已消除。
+
+### Changed
+
+- 网格扫描页：参数 1「模式」切换时单位标签（V/A）与「限值」单位标签（A/V）自动联动；Keithley 连接区新增通信接口选择行。
+
 ## 2026-09-04 — v0.2.0
 
 ### Added

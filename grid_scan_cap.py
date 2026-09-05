@@ -96,6 +96,7 @@ class GridScanConfig:
     keithley_timeout: float = 5.0
     keithley_compliance: float = 0.1
     keithley_nplc: float = 1.0
+    keithley_interface: str = "rs232"   # "rs232" 或 "gpib"
 
     def __post_init__(self):
         if not self.scan_id:
@@ -108,6 +109,9 @@ class GridScanConfig:
             raise ValueError("param2_name 必须为 'snr_db' 或 'vpp'")
         if self.step_repeats < 1:
             raise ValueError("step_repeats 必须 >= 1")
+        if self.keithley_interface.lower() not in ("rs232", "serial", "usb", "gpib",
+                                                   "gpio", "ieee488"):
+            raise ValueError("keithley_interface 必须为 'rs232' 或 'gpib'")
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +277,7 @@ class GridScanner:
             baudrate=self.cfg.keithley_baudrate,
             timeout=self.cfg.keithley_timeout,
             logger=self.logger,
+            interface=self.cfg.keithley_interface,
         )
         self.keithley.connect()
         self.keithley.set_source_mode(self.cfg.param1_mode)

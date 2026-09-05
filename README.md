@@ -11,7 +11,7 @@ New features:
 - Automatic plotting with display in Spyder
 - Generates both CodePlot v5 editable scripts + NPZ data for later figure refinement
 - Each test automatically generates a unique ID and saves a transmission record
-- Keithley 2400 source-meter control over RS-232 / USB-to-RS232
+- Keithley 2400 source-meter control over RS-232 / USB-to-RS232 or GPIB (IEEE-488)
 - Automated 2-D parameter grid scan (Keithley bias vs AWG Vpp) with CSV summary and CodePlot contour plots
 
 ## Project Structure
@@ -29,7 +29,7 @@ dmt_python/
 ├── main.py                     # Full flow entry point
 ├── utils.py                    # File I/O, synchronization, resampling, plotting
 ├── virtual_channel.py          # Virtual channel simulation
-├── keithley2400_controller.py  # Keithley 2400 RS-232/USB driver
+├── keithley2400_controller.py  # Keithley 2400 driver (RS-232/USB + GPIB via pyvisa)
 ├── grid_scan.py                # Automated bias vs Vpp grid scan engine
 ├── requirements.txt
 ├── data/                  # Data files
@@ -251,7 +251,7 @@ It contains six tabs:
 | DMT Symbol Modulation | Bit/Power Loading, QPSK constellation, RX constellation by modulation order, density heatmap |
 | Transmission Results | Experiment record table (rate/BER/SER/SNR), SNR comparison, per-subcarrier SER/BER, TX-RX nonlinearity, experiment trends |
 | Run Test | Select mode (online / offline / virtual channel) and step, then call `main.py` directly; log is shown live and view refreshes on completion |
-| Keithley 2400 | Connect and control a Keithley 2400 source meter over RS-232 or USB-to-RS232 |
+| Keithley 2400 | Connect and control a Keithley 2400 source meter over RS-232, USB-to-RS232 or GPIB |
 | Grid Scan | Automated 2-D sweep of Keithley bias vs AWG Vpp with CSV summary and contour plots |
 
 ### Browse Experiment Data
@@ -296,18 +296,19 @@ In the "Run Test" tab:
 
 ### Keithley 2400 Control
 
-The "⚡ Keithley 2400" tab controls a Keithley 2400 SourceMeter through a COM port. The port can be a physical RS-232 port or a USB-to-RS232 adapter (FTDI / Prolific / CH340 / CP210x).
+The "⚡ Keithley 2400" tab controls a Keithley 2400 SourceMeter over **RS-232 / USB-to-RS232** or **GPIB (IEEE-488)** — select the interface in the **通信接口** dropdown; the port list switches between COM ports and GPIB resources automatically. The RS-232 port can be physical or a USB-to-RS232 adapter (FTDI / Prolific / CH340 / CP210x); GPIB requires pyvisa with NI-VISA / Keysight VISA installed.
 
-1. Select the COM port and baud rate, then click **Connect**.
-2. Choose **Source Mode**: `voltage` (V source, current measure) or `current` (current source, voltage measure).
+1. Select the interface, port / GPIB resource and baud rate, then click **Connect**.
+2. Choose **Source Mode**: `voltage` (V source, current measure) or `current` (current source, voltage measure). Switching the source mode automatically re-targets the measurement function to the complementary quantity (`:SENS:FUNC` is sent to the instrument); requesting a measurement function equal to the source mode is rejected.
 3. Set **Level** (V or A), **Compliance** limit, and **NPLC** integration time.
 4. Click **Apply Settings**, then **Output ON**.
 5. Click **Measure** to read voltage, current, resistance, and time.
 6. The output is automatically turned off when the GUI closes.
 
-Defaults are defined in `config.py`:
+Defaults are defined in `config_cap.py`:
 
 ```python
+K2400_INTERFACE = "rs232"         # "rs232" or "gpib"
 K2400_PORT = "COM1"
 K2400_BAUDRATE = 9600
 K2400_SOURCE_MODE = "voltage"

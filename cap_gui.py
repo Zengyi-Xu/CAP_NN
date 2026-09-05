@@ -1400,6 +1400,7 @@ class Keithley2400Panel(ttk.Frame):
         self.instrument: Optional[Keithley2400] = None
 
         self.port_var = tk.StringVar(value=cfg.K2400_PORT)
+        self.interface_var = tk.StringVar(value=getattr(cfg, "K2400_INTERFACE", "rs232"))
         self.source_mode_var = tk.StringVar(value=cfg.K2400_SOURCE_MODE)
         self.level_var = tk.StringVar(value=str(cfg.K2400_LEVEL))
         self.compliance_var = tk.StringVar(value=str(cfg.K2400_COMPLIANCE))
@@ -1433,23 +1434,30 @@ class Keithley2400Panel(ttk.Frame):
         inner = tk.Frame(card, bg=COLOR_CARD)
         inner.pack(fill=tk.X, padx=12, pady=12)
 
-        ttk.Label(inner, text="COM 端口", style="Section.TLabel").grid(
+        ttk.Label(inner, text="通信接口", style="Section.TLabel").grid(
             row=0, column=0, sticky=tk.W, padx=(0, 8), pady=4)
+        self.interface_combo = ttk.Combobox(inner, textvariable=self.interface_var,
+                                            values=["rs232", "gpib"], state="readonly", width=12)
+        self.interface_combo.bind("<<ComboboxSelected>>", self._on_interface_change)
+        self.interface_combo.grid(row=0, column=1, sticky=tk.W, padx=(0, 8), pady=4)
+
+        ttk.Label(inner, text="端口 / GPIB", style="Section.TLabel").grid(
+            row=1, column=0, sticky=tk.W, padx=(0, 8), pady=4)
         self.port_combo = ttk.Combobox(inner, textvariable=self.port_var,
                                        values=[], width=40, state="readonly")
-        self.port_combo.grid(row=0, column=1, sticky=tk.W, padx=(0, 8), pady=4)
+        self.port_combo.grid(row=1, column=1, sticky=tk.W, padx=(0, 8), pady=4)
         ttk.Button(inner, text="⟳ 刷新", command=self._refresh_ports).grid(
-            row=0, column=2, padx=(0, 8), pady=4)
+            row=1, column=2, padx=(0, 8), pady=4)
 
         ttk.Label(inner, text="波特率", style="Section.TLabel").grid(
-            row=1, column=0, sticky=tk.W, padx=(0, 8), pady=4)
+            row=2, column=0, sticky=tk.W, padx=(0, 8), pady=4)
         self.baud_combo = ttk.Combobox(inner, values=[9600, 19200, 38400, 57600, 115200],
                                        width=12, state="readonly")
         self.baud_combo.set(str(cfg.K2400_BAUDRATE))
-        self.baud_combo.grid(row=1, column=1, sticky=tk.W, padx=(0, 8), pady=4)
+        self.baud_combo.grid(row=2, column=1, sticky=tk.W, padx=(0, 8), pady=4)
 
         self.conn_btn = ttk.Button(inner, text="连接", command=self._toggle_connect)
-        self.conn_btn.grid(row=1, column=2, padx=(0, 8), pady=4)
+        self.conn_btn.grid(row=2, column=2, padx=(0, 8), pady=4)
 
         card2 = make_card(scrollable)
         card2.pack(fill=tk.X, padx=16, pady=6)
@@ -1527,7 +1535,7 @@ class Keithley2400Panel(ttk.Frame):
         self.log_text.configure(state=tk.DISABLED)
 
     def _refresh_ports(self):
-        ports = refresh_port_list()
+        ports = refresh_port_list(interface=self.interface_var.get())
         self.port_combo["values"] = ports
         if ports and not self.port_var.get():
             self.port_var.set(parse_port_entry(ports[0]))
@@ -1536,6 +1544,9 @@ class Keithley2400Panel(ttk.Frame):
             matching = [p for p in ports if parse_port_entry(p) == current]
             if not matching:
                 self.port_var.set(parse_port_entry(ports[0]))
+
+    def _on_interface_change(self, _event=None):
+        self._refresh_ports()
 
     def _on_mode_change(self, _event=None):
         mode = self.source_mode_var.get()
@@ -1555,12 +1566,14 @@ class Keithley2400Panel(ttk.Frame):
     def _connect(self):
         port = self.port_var.get()
         if not port:
-            messagebox.showwarning("未选端口", "请先选择 COM 端口。")
+            messagebox.showwarning("未选端口", "请先选择端口 / GPIB 资源。")
             return
         baud = int(self.baud_combo.get() or cfg.K2400_BAUDRATE)
+        interface = self.interface_var.get()
         try:
             self.instrument = Keithley2400(port=port, baudrate=baud,
-                                           timeout=cfg.K2400_TIMEOUT)
+                                           timeout=cfg.K2400_TIMEOUT,
+                                           interface=interface)
             self.instrument.connect()
             self.conn_btn.configure(text="断开连接")
             self.status_lbl.configure(text=f"Connected ({port})")
@@ -1696,6 +1709,7 @@ class GridScanPanel(ttk.Frame):
         self.use_nn_var = tk.BooleanVar(value=False)
         self.use_virtual_channel_var = tk.BooleanVar(value=True)
         self.port_var = tk.StringVar(value=cfg.K2400_PORT)
+        self.interface_var = tk.StringVar(value=getattr(cfg, "K2400_INTERFACE", "rs232"))
         self.baud_var = tk.StringVar(value=str(cfg.K2400_BAUDRATE))
         self.compliance_var = tk.StringVar(value=str(cfg.K2400_COMPLIANCE))
         self.nplc_var = tk.StringVar(value=str(cfg.K2400_NPLC))
@@ -1703,6 +1717,7 @@ class GridScanPanel(ttk.Frame):
         self._build_ui()
         self._refresh_ports()
         self._refresh_scan_list()
+        self._on_p1_mode_change()
 
     def _build_ui(self):
         paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
@@ -1727,9 +1742,12 @@ class GridScanPanel(ttk.Frame):
         ttk.Entry(inner, textvariable=self.p1_name_var, width=14).grid(
             row=1, column=1, sticky=tk.W, padx=(0, 8), pady=2)
         ttk.Label(inner, text="模式").grid(row=1, column=2, sticky=tk.W, padx=(0, 4))
-        ttk.Combobox(inner, textvariable=self.p1_mode_var,
-                     values=["voltage", "current"], state="readonly", width=10).grid(
-            row=1, column=3, sticky=tk.W, pady=2)
+        self.p1_mode_combo = ttk.Combobox(inner, textvariable=self.p1_mode_var,
+                                          values=["voltage", "current"], state="readonly", width=10)
+        self.p1_mode_combo.bind("<<ComboboxSelected>>", self._on_p1_mode_change)
+        self.p1_mode_combo.grid(row=1, column=3, sticky=tk.W, pady=2)
+        self.p1_unit_lbl = ttk.Label(inner, text="V")
+        self.p1_unit_lbl.grid(row=1, column=4, sticky=tk.W, padx=(4, 0))
 
         ttk.Label(inner, text="起始").grid(row=2, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.p1_start_var, width=10).grid(
@@ -1783,23 +1801,31 @@ class GridScanPanel(ttk.Frame):
         ttk.Label(inner, text="Keithley 连接", style="Section.TLabel").grid(
             row=11, column=0, columnspan=4, sticky=tk.W, pady=(12, 6))
 
-        ttk.Label(inner, text="COM 端口").grid(row=12, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="通信接口").grid(row=12, column=0, sticky=tk.W, padx=(0, 4))
+        self.interface_combo = ttk.Combobox(inner, textvariable=self.interface_var,
+                                            values=["rs232", "gpib"], state="readonly", width=10)
+        self.interface_combo.bind("<<ComboboxSelected>>", self._on_interface_change)
+        self.interface_combo.grid(row=12, column=1, sticky=tk.W, padx=(0, 8), pady=2)
+
+        ttk.Label(inner, text="端口 / GPIB").grid(row=13, column=0, sticky=tk.W, padx=(0, 4))
         self.port_combo = ttk.Combobox(inner, textvariable=self.port_var,
                                        values=[], width=18, state="readonly")
-        self.port_combo.grid(row=12, column=1, sticky=tk.W, padx=(0, 8), pady=2)
+        self.port_combo.grid(row=13, column=1, sticky=tk.W, padx=(0, 8), pady=2)
         ttk.Button(inner, text="⟳ 刷新", command=self._refresh_ports).grid(
-            row=12, column=2, columnspan=2, sticky=tk.W, pady=2)
+            row=13, column=2, columnspan=2, sticky=tk.W, pady=2)
 
-        ttk.Label(inner, text="波特率").grid(row=13, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Label(inner, text="波特率").grid(row=14, column=0, sticky=tk.W, padx=(0, 4))
         ttk.Entry(inner, textvariable=self.baud_var, width=10).grid(
-            row=13, column=1, sticky=tk.W, padx=(0, 8), pady=2)
-        ttk.Label(inner, text="限值").grid(row=13, column=2, sticky=tk.W, padx=(0, 4))
-        ttk.Entry(inner, textvariable=self.compliance_var, width=10).grid(
-            row=13, column=3, sticky=tk.W, pady=2)
-
-        ttk.Label(inner, text="NPLC").grid(row=14, column=0, sticky=tk.W, padx=(0, 4))
-        ttk.Entry(inner, textvariable=self.nplc_var, width=10).grid(
             row=14, column=1, sticky=tk.W, padx=(0, 8), pady=2)
+        ttk.Label(inner, text="限值").grid(row=14, column=2, sticky=tk.W, padx=(0, 4))
+        ttk.Entry(inner, textvariable=self.compliance_var, width=10).grid(
+            row=14, column=3, sticky=tk.W, pady=2)
+        self.p1_comp_unit_lbl = ttk.Label(inner, text="A")
+        self.p1_comp_unit_lbl.grid(row=14, column=4, sticky=tk.W, padx=(4, 0))
+
+        ttk.Label(inner, text="NPLC").grid(row=15, column=0, sticky=tk.W, padx=(0, 4))
+        ttk.Entry(inner, textvariable=self.nplc_var, width=10).grid(
+            row=15, column=1, sticky=tk.W, padx=(0, 8), pady=2)
 
         ctrl = tk.Frame(left, bg=COLOR_CARD)
         ctrl.pack(fill=tk.X, pady=(12, 0), padx=2)
@@ -1857,10 +1883,22 @@ class GridScanPanel(ttk.Frame):
         self.canvas.draw()
 
     def _refresh_ports(self):
-        ports = refresh_port_list()
+        ports = refresh_port_list(interface=self.interface_var.get())
         self.port_combo["values"] = ports
         if ports and not self.port_var.get():
             self.port_var.set(parse_port_entry(ports[0]))
+
+    def _on_interface_change(self, _event=None):
+        self._refresh_ports()
+
+    def _on_p1_mode_change(self, _event=None):
+        mode = self.p1_mode_var.get()
+        if mode == "voltage":
+            self.p1_unit_lbl.configure(text="V")
+            self.p1_comp_unit_lbl.configure(text="A")
+        else:
+            self.p1_unit_lbl.configure(text="A")
+            self.p1_comp_unit_lbl.configure(text="V")
 
     def _refresh_scan_list(self):
         scans = list_grid_scans()
@@ -1892,6 +1930,14 @@ class GridScanPanel(ttk.Frame):
     def _draw_contour(self, scan_id: str):
         from scipy.interpolate import griddata
 
+        # colorbar 是独立的 Axes，ax.clear() 不会移除它，必须先手动删除，
+        # 否则每次切换指标都会多一条 colorbar，主图被越挤越小
+        if getattr(self, "_cbar", None) is not None:
+            try:
+                self._cbar.remove()
+            except Exception:
+                pass
+            self._cbar = None
         self.ax.clear()
         header, rows = load_summary(scan_id)
         if header is None or not rows:
@@ -1899,7 +1945,7 @@ class GridScanPanel(ttk.Frame):
             self.canvas.draw()
             return
 
-        col_idx = {h: i for i, h in enumerate(header.split(","))}
+        col_idx = {h: i for i, h in enumerate(header)}
         metric = self.plot_metric_var.get()
         if metric not in col_idx:
             metric = "snr_db"
@@ -1918,13 +1964,16 @@ class GridScanPanel(ttk.Frame):
         Xi, Yi = np.meshgrid(xi, yi)
         Zi = griddata((bias, vpp), z, (Xi, Yi), method="cubic")
 
+        metric_labels = {"snr_db": "SNR (dB)", "ber": "BER", "ser": "SER"}
+        metric_label = metric_labels.get(metric, metric)
+
         if np.any(np.isfinite(Zi)):
             levels = np.linspace(np.nanmin(Zi), np.nanmax(Zi), 20)
             im = self.ax.contourf(Xi, Yi, Zi, levels=levels, cmap="viridis", extend="both")
-            self.fig.colorbar(im, ax=self.ax, label=metric)
-        self.ax.set_xlabel(header.split(",")[1] if len(header.split(",")) > 1 else "param1")
+            self._cbar = self.fig.colorbar(im, ax=self.ax, label=metric_label)
+        self.ax.set_xlabel(header[1] if len(header) > 1 else "param1")
         self.ax.set_ylabel("SNR (dB)")
-        self.ax.set_title(f"{metric.upper()} Grid Scan ({scan_id})")
+        self.ax.set_title(f"{metric_label} 网格扫描 ({scan_id})")
         self.fig.tight_layout()
         self.canvas.draw()
 
@@ -1951,6 +2000,7 @@ class GridScanPanel(ttk.Frame):
             keithley_timeout=cfg.K2400_TIMEOUT,
             keithley_compliance=float(self.compliance_var.get()),
             keithley_nplc=float(self.nplc_var.get()),
+            keithley_interface=self.interface_var.get(),
         )
 
     def _start_scan(self):
