@@ -12,6 +12,7 @@ New features:
 - Generates both CodePlot v5 editable scripts + NPZ data for later figure refinement
 - Each test automatically generates a unique ID and saves a transmission record
 - Keithley 2400 source-meter control over RS-232 / USB-to-RS232 or GPIB (IEEE-488)
+- GW Instek GPD-4303S 4-channel DC power supply control over USB-B
 - Automated 2-D parameter grid scan (Keithley bias vs AWG Vpp) with CSV summary and CodePlot contour plots
 
 ## Project Structure
@@ -30,6 +31,8 @@ dmt_python/
 ├── utils.py                    # File I/O, synchronization, resampling, plotting
 ├── virtual_channel.py          # Virtual channel simulation
 ├── keithley2400_controller.py  # Keithley 2400 driver (RS-232/USB + GPIB via pyvisa)
+├── gpd4303s_controller.py      # GPD-4303S 4-channel DC power supply driver (USB-B virtual serial)
+├── gpd4303s_panel.py           # GPD-4303S GUI panel
 ├── grid_scan.py                # Automated bias vs Vpp grid scan engine
 ├── requirements.txt
 ├── data/                  # Data files
@@ -237,13 +240,13 @@ PLOT_SHOW = False
 
 ## Experimental Data Visualization GUI
 
-`dmt_gui.py` provides a desktop GUI for browsing saved experiment data and running tests directly (no extra dependencies: tkinter + matplotlib, with high-DPI support):
+`cap_gui.py` provides a desktop GUI for browsing saved experiment data and running tests directly (no extra dependencies: tkinter + matplotlib, with high-DPI support):
 
 ```bash
-.venv\Scripts\python dmt_gui.py
+.venv\Scripts\python cap_gui.py
 ```
 
-It contains six tabs:
+It contains seven tabs:
 
 | Tab | Content |
 |-----|---------|
@@ -253,6 +256,7 @@ It contains six tabs:
 | Run Test | Select mode (online / offline / virtual channel) and step, then call `main.py` directly; log is shown live and view refreshes on completion |
 | Keithley 2400 | Connect and control a Keithley 2400 source meter over RS-232, USB-to-RS232 or GPIB |
 | Grid Scan | Automated 2-D sweep of Keithley bias vs AWG Vpp with CSV summary and contour plots |
+| GPD-4303S | USB-B control of the 4-channel GW Instek GPD-4303S DC power supply: set voltage/current per channel, read live output, and toggle master output |
 
 ### Browse Experiment Data
 

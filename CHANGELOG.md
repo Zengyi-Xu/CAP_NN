@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-10
+
+### Added
+
+- **GPD-4303S 四通道直流电源 USB-B 控制（同步自 DMT_PY_NN）**
+  - 新增 `gpd4303s_controller.py`：GPD-4303S 虚拟串口驱动，支持四通道电压/电流设定、总输出开关、实时读数、CV/CC 状态解析。
+  - 新增 `gpd4303s_panel.py`：GUI 子页面，每个通道可独立设置电压/电流并应用；实时显示输出电压、电流、模式；底部总输出开关与通信日志。
+  - `cap_gui.py` 新增第 7 个 tab「🔌 GPD-4303S 电源」；关闭 GUI 时自动关闭输出并切回本地模式。
+  - `config_cap.py` 新增 `GPD4303S_PORT / GPD4303S_BAUDRATE / GPD4303S_TIMEOUT / GPD4303S_POLL_MS` 默认配置。
+  - `README.md` 更新为七个子页面说明，并修正 GUI 启动命令为 `python cap_gui.py`。
+
 ## 2026-09-05
 
 ### Added

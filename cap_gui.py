@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """CAP Communication System Experiment Platform GUI.
 
-Six tabs:
+Seven tabs:
     1. Waveform & Spectrum   —— TX/RX time-domain waveforms and spectra
     2. CAP Modulation        —— CAP constellation and modulation-related plots
     3. Transmission Results  —— experiment record table and run-history trend
     4. Run Test              —— run the CAP transceiver from the GUI with live log output
     5. Keithley 2400         —— RS-232/USB control of the Keithley 2400 source meter
     6. Grid Scan             —— automated bias vs SNR parameter sweep with CSV/contour output
+    7. GPD-4303S             —— USB-B control of the GW Instek GPD-4303S 4-channel DC power supply
 
 Data sources:
     data/records/record_<run_id>.json          parameters and results for each run
@@ -49,6 +50,7 @@ from keithley2400_controller import (
     K2400CommandError,
     K2400ConfigError,
 )
+from gpd4303s_panel import GPD4303SPanel
 from grid_scan_cap import GridScanner, GridScanConfig, list_grid_scans, load_summary
 
 try:
@@ -2164,6 +2166,10 @@ class CApGuiApp(tk.Tk):
         self.notebook.add(tab6, text="  🔲 网格扫描  ")
         self.panel_grid = tab6
 
+        tab7 = GPD4303SPanel(self.notebook, self)
+        self.notebook.add(tab7, text="  🔌 GPD-4303S 电源  ")
+        self.panel_gpd = tab7
+
         self.notebook.select(3)
 
         self.status_var = tk.StringVar()
@@ -2296,10 +2302,15 @@ class CApGuiApp(tk.Tk):
                                  else tk.DISABLED)
 
     def _on_close(self):
-        """Clean up the Keithley connection and stop grid scans before exit."""
+        """Clean up Keithley / GPD connections and stop grid scans before exit."""
         try:
             if hasattr(self, "panel_k2400"):
                 self.panel_k2400.on_close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "panel_gpd"):
+                self.panel_gpd.on_close()
         except Exception:
             pass
         try:
